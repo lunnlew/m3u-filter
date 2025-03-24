@@ -1,0 +1,22 @@
+# m3u-filter
+
+## 简介
+m3u-filter 是一个用于过滤 m3u 文件的工具，它可以根据用户提供的关键词过滤 m3u 文件中的条目，并生成一个新的 m3u 文件。
+
+## 功能
+- epg源订阅汇总
+- m3u文件源(含m3u及txt格式)订阅汇总
+- 支持创建过滤规则
+- 支持创建规则筛选合集
+- 支持基于筛选合集生成m3u文件
+- 支持m3u生成时包含epg信息
+
+## 安装
+```bash
+docker pull lunnlew/m3u-filter
+```
+
+## 运行
+```bash
+docker run -d --name m3u-filter -p 8000:8000 -v /path/to/your/data:/app/data lunnlew/m3u-filter
+```

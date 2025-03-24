@@ -1,0 +1,23 @@
+__pycache__
+.pnpm-store
+tmp
+*.db
+.git
+static
+data
+output.json
+*.log
+
+# Local
+.DS_Store
+*.local
+*.log*
+
+# Dist
+node_modules
+dist/
+
+# IDE
+.vscode/*
+!.vscode/extensions.json
+.idea
