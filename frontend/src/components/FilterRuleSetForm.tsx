@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { Button, Form, Input, Space, Switch, Select } from 'antd';
+import { Button, Form, Input, Space, Switch, Select, InputNumber } from 'antd';
 import type { FilterRuleSet } from '../types/filter';
 
 interface FilterRuleSetFormProps {
@@ -29,7 +29,7 @@ export const FilterRuleSetForm: React.FC<FilterRuleSetFormProps> = ({
             form={form}
             onFinish={onSubmit}
             layout="vertical"
-            initialValues={initialValues}
+            initialValues={{ sync_interval: 6, ...initialValues }}
         >
             <Form.Item name="id" hidden>
                 <Input />
@@ -66,6 +66,13 @@ export const FilterRuleSetForm: React.FC<FilterRuleSetFormProps> = ({
                         { label: '或(OR)', value: 'OR' }
                     ]}
                 />
+            </Form.Item>
+            <Form.Item
+                name="sync_interval"
+                label="同步周期（小时）"
+                rules={[{ required: true, message: '请输入同步周期' }]}
+            >
+                <InputNumber min={1} max={24} />
             </Form.Item>
             <Form.Item>
                 <Space>

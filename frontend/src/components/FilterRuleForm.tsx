@@ -60,6 +60,7 @@ export const FilterRuleForm: React.FC<FilterRuleFormProps> = ({
           <Option value="keyword">关键词匹配</Option>
           <Option value="resolution">分辨率匹配</Option>
           <Option value="group">分组匹配</Option>
+          <Option value="source_name">来源名称匹配</Option>
           <Option value="bitrate">码率匹配</Option>
         </Select>
       </Form.Item>

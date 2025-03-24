@@ -69,13 +69,14 @@ def schedule_generate_m3u_files():
     """调度生成M3U文件任务"""
     with get_db_connection() as conn:
         c = conn.cursor()
-        c.execute("SELECT id, name FROM filter_rule_sets WHERE enabled = 1")
+        c.execute("SELECT id, name, sync_interval FROM filter_rule_sets WHERE enabled = 1")
         rule_sets = c.fetchall()
         
-        for set_id, name in rule_sets:
+        for set_id, name, interval in rule_sets:
+            hours = interval if interval is not None else 6
             scheduler.add_job(
                 generate_m3u_file,
-                trigger=IntervalTrigger(hours=1),
+                trigger=IntervalTrigger(hours=hours),
                 args=[set_id],
                 id=f'generate_m3u_{set_id}',
                 name=f'Generate M3U for Rule Set: {name}',

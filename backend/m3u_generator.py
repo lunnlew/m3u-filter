@@ -24,10 +24,50 @@ class M3UGenerator:
 
         return list(url_map.values())
 
-    def generate_m3u(self, channels: List[Dict], rule_names: List[str] = [], header_info: dict = {}) -> tuple[str, str]:
-        """生成M3U格式的播放列表"""
+    def _sort_and_group_channels(self, channels: List[Dict], sort_by: str = 'display_name', group_order: List[str] = []) -> List[Dict]:
+        """对频道进行排序和分组处理
+        
+        Args:
+            channels: 频道列表
+            sort_by: 排序字段，默认按display_name排序
+            group_order: 分组顺序列表，如果提供则按照指定顺序排列分组
+        """
+        # 首先按照频道名称排序
+        sorted_channels = sorted(channels, key=lambda x: x.get(sort_by, '').lower())
+        
+        if not group_order or len(group_order) == 0:
+            # 如果没有指定分组顺序，直接返回排序后的结果
+            return sorted_channels
+        
+        # 按照指定的分组顺序重新组织频道
+        grouped_channels = []
+        # 首先处理指定顺序的分组
+        for group in group_order:
+            group_channels = [ch for ch in sorted_channels if ch.get('group_title') == group]
+            grouped_channels.extend(group_channels)
+        
+        # 处理未在指定顺序中的分组
+        remaining_channels = [ch for ch in sorted_channels if ch.get('group_title') not in group_order]
+        grouped_channels.extend(remaining_channels)
+        
+        return grouped_channels
+
+    def generate_m3u(self, channels: List[Dict], rule_names: List[str] = [], header_info: dict = {}, 
+                    sort_by: str = 'display_name', group_order: List[str] = []) -> tuple[str, str]:
+        """生成M3U格式的播放列表
+        
+        Args:
+            channels: 频道列表
+            rule_names: 规则名称列表
+            header_info: 头部信息
+            sort_by: 排序字段
+            group_order: 分组顺序列表
+        """
         # 去重处理
         filtered_channels = self._deduplicate_channels(channels)
+        
+        # 排序和分组处理
+        filtered_channels = self._sort_and_group_channels(filtered_channels, sort_by, group_order)
         
         # 确保每个频道都包含必要的字段
         for channel in filtered_channels:
@@ -37,7 +77,7 @@ class M3UGenerator:
                 channel['group_title'] = '未分类'
 
         # 初始化M3U文件内容
-        lines = ['#EXTM3U']
+        lines = [f'#EXTM3U x-tvg-url="{STATIC_URL_PREFIX}/m3u/epg.xml"']
 
         # 添加header_info中的信息
         if 'generated_at' in header_info:
@@ -71,8 +111,8 @@ class M3UGenerator:
                 extinf += f' catchup-source="{channel["catchup_source"]}"'
             
             # 添加分组信息
-            if 'group-title' in channel:
-                extinf += f' group-title="{channel["group-title"]}"'
+            if 'group_title' in channel:
+                extinf += f' group-title="{channel["group_title"]}"'
             
             # 添加频道名称
             extinf += f',{channel["display_name"]}'

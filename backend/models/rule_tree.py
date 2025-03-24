@@ -51,13 +51,15 @@ class RuleNode:
             field = 'display_name'
         elif rule.type == 'group':
             field = 'group_title'
+        elif rule.type == 'source_name':
+            field = 'source_name'
         elif rule.type == 'resolution':
             field = 'resolution'
         elif rule.type == 'bitrate':
             field = 'bitrate'
         elif rule.type == 'keyword':
             # 关键字可以匹配多个字段
-            fields = ['display_name', 'group_title', 'stream_url']
+            fields = ['display_name', 'group_title', 'source_name', 'stream_url']
             for f in fields:
                 if f in channel and self._match_pattern(rule, channel.get(f, '')):
                     return rule.action == 'include'

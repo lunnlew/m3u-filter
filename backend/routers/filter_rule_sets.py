@@ -7,6 +7,7 @@ from m3u_generator import M3UGenerator
 from models import BaseResponse
 from pathlib import Path
 from datetime import datetime
+import json
 
 router = APIRouter()
 
@@ -24,20 +25,21 @@ class FilterRuleSetResponse(BaseModel):
     logic_type: Optional[str] = "AND"
     rules: List[dict]  # 修改为接收字典列表
     children: Optional[List[dict]] = None
+    sync_interval: Optional[int] = None  # 新增字段，单位：分钟
 
 @router.get("/filter-rule-sets")
 def get_filter_rule_sets():
     """获取所有规则集合"""
     with get_db_connection() as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT id, name, description, enabled, logic_type FROM filter_rule_sets")
+        cursor.execute("SELECT id, name, description, enabled, logic_type, sync_interval FROM filter_rule_sets")
         columns = [column[0] for column in cursor.description]
         rule_sets = [dict(zip(columns, row)) for row in cursor.fetchall()]
         data = []
         for rule_set in rule_sets:
             # 获取子规则集合
             cursor.execute("""
-                SELECT rs.id, rs.name, rs.description, rs.enabled, rs.logic_type
+                SELECT rs.id, rs.name, rs.description, rs.enabled, rs.sync_interval, rs.logic_type
                 FROM filter_rule_sets rs
                 INNER JOIN filter_rule_set_children rsc ON rs.id = rsc.child_set_id
                 WHERE rsc.parent_set_id = ?
@@ -51,6 +53,7 @@ def get_filter_rule_sets():
                     description=rule_set['description'],
                     enabled=bool(rule_set['enabled']),
                     logic_type=rule_set['logic_type'],
+                    sync_interval=rule_set['sync_interval'],
                     rules=_get_rules_for_set(cursor, rule_set['id']),
                     children=[{
                         'id': child['id'],
@@ -58,6 +61,7 @@ def get_filter_rule_sets():
                         'description': child['description'],
                         'enabled': bool(child['enabled']),
                         'logic_type': child['logic_type'],
+                        'sync_interval': child['sync_interval'],
                         'rules': _get_rules_for_set(cursor, child['id'])
                     } for child in children]
                 )
@@ -97,8 +101,8 @@ def create_filter_rule_set(rule_set: FilterRuleSet):
             return BaseResponse.error(message="Rule set name already exists", code=400)
         
         cursor.execute(
-            "INSERT INTO filter_rule_sets (name, description, enabled, logic_type) VALUES (?, ?, ?, ?)",
-            (rule_set.name, rule_set.description, rule_set.enabled, rule_set.logic_type)
+            "INSERT INTO filter_rule_sets (name, description, enabled, logic_type, sync_interval) VALUES (?, ?, ?, ?, ?)",
+            (rule_set.name, rule_set.description, rule_set.enabled, rule_set.logic_type, rule_set.sync_interval)
         )
         set_id = cursor.lastrowid
         
@@ -129,8 +133,8 @@ def update_filter_rule_set(set_id: int, rule_set: FilterRuleSet):
             return BaseResponse.error(message="Rule set name already exists", code=400)
         
         cursor.execute(
-            "UPDATE filter_rule_sets SET name=?, description=?, enabled=?, logic_type=? WHERE id=?",
-            (rule_set.name, rule_set.description, rule_set.enabled, rule_set.logic_type, set_id)
+            "UPDATE filter_rule_sets SET name=?, description=?, enabled=?, logic_type=?, sync_interval=? WHERE id=?",
+            (rule_set.name, rule_set.description, rule_set.enabled, rule_set.logic_type, rule_set.sync_interval, set_id)
         )
         
         # 更新子规则集合关系
@@ -297,8 +301,18 @@ def remove_child_set(parent_set_id: int, child_set_id: int):
         return BaseResponse.success()
 
 @router.post("/filter-rule-sets/{set_id}/generate-m3u")
-def generate_m3u_file(set_id: int):
-    """根据规则集合生成M3U文件"""
+async def generate_m3u_file(
+    set_id: int,
+    sort_by: str = 'display_name',
+    group_order: List[str] = []
+):
+    """根据规则集合生成M3U文件
+    
+    Args:
+        set_id: 规则集合ID
+        sort_by: 排序字段，可选值：display_name, group_title 等
+        group_order: 分组顺序列表，例如 ["央视", "卫视", "地方台"]
+    """
     with get_db_connection() as conn:
         cursor = conn.cursor()
         # 获取规则集合
@@ -346,6 +360,7 @@ def generate_m3u_file(set_id: int):
         rule_tree = RuleTree()
         rule_tree.build_from_rule_set(set_id, conn)
 
+
         # 使用规则树过滤频道
         filtered_channels = rule_tree.filter_channels(channels)
 
@@ -356,12 +371,18 @@ def generate_m3u_file(set_id: int):
         
         # 使用M3UGenerator生成M3U文件
         generator = M3UGenerator()
-        # 添加生成时间和提供者信息
         header_info = {
             "generated_at": datetime.now().isoformat(),
-            "provider": "M3U Filter"  # 替换为实际的提供者名称
+            "provider": "M3U Filter"
         }
-        m3u_content, filename = generator.generate_m3u(filtered_channels, [filename], header_info)
+
+        m3u_content, filename = generator.generate_m3u(
+            filtered_channels, 
+            [filename], 
+            header_info,
+            sort_by=sort_by,
+            group_order=group_order
+        )
         
         # 保存到m3u文件夹
         m3u_dir = STATIC_DIR / 'm3u'

@@ -16,7 +16,8 @@ export interface FilterRuleSet {
   description: string;
   enabled: boolean;
   rules?: any[];
-  children?: any[]
+  children?: any[];
+  sync_interval: number;
 }
 
 export interface GenerateM3UResponse {

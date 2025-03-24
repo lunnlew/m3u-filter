@@ -365,6 +365,9 @@ CREATE TABLE IF NOT EXISTS stream_tracks (
     frame_rate     REAL,
     ping_time      REAL,
     last_test_time TIMESTAMP,
+    speed_test_time DATETIME,
+    download_speed FLOAT,
+    speed_test_status INTEGER DEFAULT 0,
     created_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (
@@ -467,6 +470,7 @@ CREATE TABLE IF NOT EXISTS filter_rule_sets (
     name TEXT NOT NULL,
     description TEXT,
     enabled BOOLEAN DEFAULT TRUE,
+    sync_interval INTEGER NOT NULL DEFAULT 6,
     logic_type TEXT NOT NULL DEFAULT 'AND' CHECK(logic_type IN ('AND', 'OR'))
 );
 

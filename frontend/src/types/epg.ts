@@ -13,4 +13,5 @@ export interface EPGSource {
   last_update: string | null;
   active: boolean;
   proxy?: ProxyConfig;
+  sync_interval?: number;
 }

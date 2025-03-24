@@ -124,6 +124,11 @@ export const FilterRuleSetList = () => {
             render: (_: any, record: FilterRuleSet) => (record.rules?.length || 0) + (record.children?.length || 0)
         },
         {
+            title: '生成周期',
+            key: 'sync_interval',
+            render: (_: any, record: FilterRuleSet) => record.sync_interval + '小时'
+        },
+        {
             title: '操作',
             key: 'action',
             render: (_: any, record: FilterRuleSet) => (

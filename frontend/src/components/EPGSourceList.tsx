@@ -41,6 +41,11 @@ export const EPGSourceList: React.FC = () => {
       render: (text: string | null) => text ? new Date(text).toLocaleString() : '从未更新',
     },
     {
+        title: '同步周期',
+        key: 'sync_interval',
+        render: (_: any, record: EPGSource) => record.sync_interval + '小时'
+    },
+    {
       title: '状态',
       dataIndex: 'active',
       key: 'active',

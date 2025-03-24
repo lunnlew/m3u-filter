@@ -62,6 +62,7 @@ const FilterRuleList: React.FC<FilterRuleListProps> = () => {
           'keyword': '关键词匹配',
           'resolution': '分辨率匹配',
           'group': '分组匹配',
+          'source_name': '来源名称匹配',
           'bitrate': '码率匹配'
         };
         return typeMap[type] || type;

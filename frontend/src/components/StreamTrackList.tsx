@@ -148,6 +148,15 @@ export default function StreamTrackList() {
       }
     },
     {
+      title: '测试速率',
+      dataIndex: 'download_speed',
+      key: 'download_speed',
+      render: (val: number | null) => {
+        if (val === null) return '-';
+        return `${val.toFixed(2)}MB/s`;
+      }
+    },
+    {
       title: 'Ping时间',
       dataIndex: 'ping_time',
       key: 'ping_time',

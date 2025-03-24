@@ -8,7 +8,7 @@ Base = declarative_base()
 class FilterRule(BaseModel):
     id: Optional[int] = None
     name: str
-    type: str  # 匹配类型：name, keyword, resolution, group, bitrate
+    type: str  # 匹配类型：name, keyword, resolution, group, bitrate, source_name
     pattern: str  # 匹配模式
     action: str  # 动作：include或exclude
     priority: int = 0  # 优先级
@@ -23,7 +23,7 @@ class FilterRuleModel(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, index=True)
-    type = Column(String)  # 匹配类型：name, keyword, resolution, group, bitrate
+    type = Column(String)  # 匹配类型：name, keyword, resolution, group, bitrate, source_name
     pattern = Column(String)  # 匹配模式
     action = Column(String)  # 动作：include或exclude
     priority = Column(Integer, default=0)  # 优先级
@@ -39,6 +39,7 @@ class FilterRuleSet(BaseModel):
     logic_type: str = 'AND'
     rules: Optional[List[FilterRule]] = None
     children: Optional[List[int]] = None
+    sync_interval: int = 6  # 同步间隔（小时）
 
 class FilterRuleSetModel(Base):
     __tablename__ = 'filter_rule_sets'
