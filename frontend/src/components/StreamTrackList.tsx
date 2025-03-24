@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Table, Input, Select, Button, Space, message, Popconfirm } from 'antd';
+import { Table, Input, Select, Button, Space, message, Popconfirm, Tooltip } from 'antd';
 import { useStreamTracks, useStreamTrackDelete, useStreamTrackTest, useStreamTrackTestAll } from '../api/streamTracks';
 import { StreamTrack, PaginatedStreamTracks } from '../types/streamTrack';
 
@@ -98,6 +98,15 @@ export default function StreamTrackList() {
       title: '资源地址',
       dataIndex: 'url',
       key: 'url',
+      width: 200,
+      ellipsis: {
+        showTitle: false
+      },
+      render: (url: string) => (
+        <Tooltip placement="topLeft" title={url}>
+          <span>{url}</span>
+        </Tooltip>
+      )
     },
     {
       title: '视频编码',
@@ -152,7 +161,7 @@ export default function StreamTrackList() {
       dataIndex: 'download_speed',
       key: 'download_speed',
       render: (val: number | null) => {
-        if (val === null) return '-';
+        if (val === null || val == 0) return '-';
         return `${val.toFixed(2)}MB/s`;
       }
     },

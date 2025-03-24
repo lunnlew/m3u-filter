@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Table, Button, Modal, message } from 'antd';
+import { Table, Button, Modal, message, Tooltip } from 'antd';
 import { StreamSource } from '../types/stream';
 import { useStreamSources, useStreamSourceMutation, useStreamSourceDelete, useStreamSourceSync } from '../api/streamSources';
 import { StreamSourceForm } from './StreamSourceForm';
@@ -33,7 +33,17 @@ export const StreamSourceList: React.FC = () => {
 
   const columns = [
     { title: '名称', dataIndex: 'name', key: 'name' },
-    { title: 'URL', dataIndex: 'url', key: 'url' },
+    {
+      title: 'URL', dataIndex: 'url', key: 'url', width: 200,
+      ellipsis: {
+        showTitle: false
+      },
+      render: (url: string) => (
+        <Tooltip placement="topLeft" title={url}>
+          <span>{url}</span>
+        </Tooltip>
+      )
+    },
     { title: '类型', dataIndex: 'type', key: 'type' },
     { title: 'EPG源', dataIndex: 'x_tvg_url', key: 'x_tvg_url' },
     {

@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { Table, Button, Modal, message } from 'antd';
+import { Table, Button, Modal, message, Tooltip } from 'antd';
 import { EPGSourceForm } from './EPGSourceForm';
 import { EPGSource } from '../types/epg';
 import { useEPGSources, useEPGSourceMutation, useEPGSourceDelete, useEPGSourceSync } from '../api/epgSources';
+import { render } from 'react-dom';
 
 export const EPGSourceList: React.FC = () => {
   const [isModalVisible, setIsModalVisible] = useState(false);
@@ -33,7 +34,17 @@ export const EPGSourceList: React.FC = () => {
 
   const columns = [
     { title: '名称', dataIndex: 'name', key: 'name' },
-    { title: 'URL', dataIndex: 'url', key: 'url' },
+    {
+      title: 'URL', dataIndex: 'url', key: 'url', width: 200,
+      ellipsis: {
+        showTitle: false
+      },
+      render: (url: string) => (
+        <Tooltip placement="topLeft" title={url}>
+          <span>{url}</span>
+        </Tooltip>
+      )
+    },
     {
       title: '最后更新时间',
       dataIndex: 'last_update',
@@ -41,9 +52,9 @@ export const EPGSourceList: React.FC = () => {
       render: (text: string | null) => text ? new Date(text).toLocaleString() : '从未更新',
     },
     {
-        title: '同步周期',
-        key: 'sync_interval',
-        render: (_: any, record: EPGSource) => record.sync_interval + '小时'
+      title: '同步周期',
+      key: 'sync_interval',
+      render: (_: any, record: EPGSource) => record.sync_interval + '小时'
     },
     {
       title: '状态',
