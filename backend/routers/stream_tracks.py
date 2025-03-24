@@ -15,6 +15,7 @@ from ping3 import ping
 from urllib.parse import urlparse, urljoin
 from concurrent.futures import ThreadPoolExecutor
 from functools import partial
+import re  # 添加 re 模块导入
 
 logger = logging.getLogger(__name__)
 
@@ -27,97 +28,144 @@ import time
 async def test_stream_url(url: str, track_id: int = None) -> tuple[bool, float, dict]:
     try:
         start_time = datetime.now()
-        logger.info(f"开始测试流媒体URL: {url}")
+        logger.info(f"开始测试流媒体URL: {url}, track_id: {track_id}")
 
-        # 创建测试任务
-        tasks = [
-            probe_stream(url),           # FFmpeg探测任务
-            ping_url(url),              # Ping测试任务
-            test_download_speed(url, track_id) if track_id else None  # 测速任务
-        ]
+        # 首先执行探测任务获取码率信息
+        logger.debug(f"开始执行FFmpeg探测: {url}")
+        probe_result = await probe_stream(url)
+        logger.debug(f"FFmpeg探测完成: {url}")
         
-        # 过滤掉None任务并并行执行
-        results = await asyncio.gather(*[t for t in tasks if t], return_exceptions=True)
+        # 从探测结果中获取码率
+        logger.debug(f"开始提取码率信息: {url}")
+        bitrate = await extract_bitrate(probe_result)
+        logger.debug(f"码率提取完成: {url}, bitrate: {bitrate/1024/1024:.2f}Mbps")
         
-        # 初始化结果变量
-        probe_result = None
-        ping_time = 0.0
-        speed_info = {
+        # 执行ping测试
+        logger.debug(f"开始执行Ping测试: {url}")
+        ping_time = await ping_url(url)
+        logger.debug(f"Ping测试完成: {url}, ping_time: {ping_time}ms")
+        
+        # 如果提供了track_id，则创建并执行下载速度测试
+        logger.debug(f"开始执行下载速度测试: {url}")
+        speed_info = await test_download_speed(url, track_id, bitrate) if track_id else {
             'download_speed': 0.0,
             'speed_test_status': False,
             'speed_test_time': None
         }
-
-        # 解析结果
-        for i, result in enumerate(results):
-            if isinstance(result, Exception):
-                logger.error(f"任务 {i} 执行失败: {str(result)}")
-                continue
-                
-            if i == 0:  # FFmpeg探测结果
-                probe_result = result
-            elif i == 1:  # Ping结果
-                ping_time = result if isinstance(result, (int, float)) else 0.0
-            elif i == 2 and track_id:  # 测速结果
-                speed_info = result
+        logger.debug(f"下载速度测试完成: {url}, speed_info: {speed_info}")
 
         # 计算总耗时
         duration = (datetime.now() - start_time).total_seconds()
 
-        # 初始化流媒体信息
-        stream_info = {
-            'video_codec': '',
-            'audio_codec': '',
-            'resolution': '',
-            'bitrate': 0,
-            'frame_rate': 0,
-            'ping_time': ping_time,
-            'download_speed': speed_info.get('download_speed', 0.0),
-            'speed_test_status': speed_info.get('speed_test_status', False),
-            'speed_test_time': speed_info.get('speed_test_time')
-        }
+        # 解析流媒体信息
+        logger.debug(f"开始解析流媒体信息: {url}")
+        stream_info = await extract_stream_info(probe_result, ping_time, speed_info)
+        logger.debug(f"流媒体信息解析完成: {url}, stream_info: {stream_info}")
 
-        # 只有在probe_result有效时才解析流信息
-        if probe_result and isinstance(probe_result, dict) and 'streams' in probe_result:
-            for stream in probe_result.get('streams', []):
-                if 'codec_type' in stream:
-                    if stream['codec_type'] == 'video':
-                        stream_info['video_codec'] = stream.get('codec_name', '')
-                        if stream.get('width') and stream.get('height'):
-                            stream_info['resolution'] = f"{stream['width']}x{stream['height']}"
-                        if stream.get('r_frame_rate'):
-                            try:
-                                num, den = map(int, stream['r_frame_rate'].split('/'))
-                                if den != 0:
-                                    stream_info['frame_rate'] = round(num / den, 2)
-                            except (ValueError, ZeroDivisionError):
-                                pass
-                    elif stream['codec_type'] == 'audio':
-                        stream_info['audio_codec'] = stream.get('codec_name', '')
-                        if stream.get('bit_rate'):
-                            try:
-                                stream_info['bitrate'] = int(stream['bit_rate']) // 1000
-                            except (ValueError, TypeError):
-                                pass
-
-        # 根据测速结果判断状态
+        # 根据速度测试结果确定状态
         status = speed_info.get('speed_test_status', False)
-        logger.info(f"流媒体测试完成: {url}, 延迟: {duration}秒, 信息: {stream_info}")
+        logger.info(f"流媒体测试完成: {url}, 状态: {status}, 延迟: {duration}秒, 信息: {stream_info}")
         return status, duration, stream_info
 
     except Exception as e:
-        logger.error(f"测试流媒体URL时发生错误: {url}, {str(e)}")
-        return False, 0.0, {
-            'video_codec': '',
-            'audio_codec': '',
-            'resolution': '',
-            'bitrate': 0,
-            'frame_rate': 0,
-            'ping_time': 0.0,
-            'download_speed': 0.0,
-            'speed_test_status': False,
-            'speed_test_time': None
-        }
+        logger.error(f"测试流媒体URL时发生错误: {url}, 错误信息: {str(e)}", exc_info=True)
+        return False, 0.0, get_default_stream_info()
+
+async def extract_bitrate(probe_result: dict) -> int:
+    """从probe结果中提取码率信息"""
+    DEFAULT_BITRATE = 5 * 1024 * 1024  # 默认5Mbps
+    
+    if not probe_result or not isinstance(probe_result, dict):
+        return DEFAULT_BITRATE
+        
+    try:
+        # 1. 从format信息中获取总码率
+        if 'format' in probe_result:
+            format_bitrate = probe_result['format'].get('bit_rate')
+            if format_bitrate:
+                return int(format_bitrate)
+        
+        # 2. 从视频流中获取码率
+        if 'streams' in probe_result:
+            video_bitrate = 0
+            audio_bitrate = 0
+            
+            for stream in probe_result.get('streams', []):
+                if stream.get('codec_type') == 'video':
+                    video_bitrate = extract_video_bitrate(stream)
+                elif stream.get('codec_type') == 'audio':
+                    audio_bitrate = int(stream.get('bit_rate', 0))
+            
+            total_stream_bitrate = video_bitrate + audio_bitrate
+            if total_stream_bitrate > 0:
+                return total_stream_bitrate
+        
+        return DEFAULT_BITRATE
+        
+    except (ValueError, TypeError) as e:
+        logger.warning(f"解析码率时出错: {str(e)}, 使用默认值5Mbps")
+        return DEFAULT_BITRATE
+
+def extract_video_bitrate(stream: dict) -> int:
+    """从视频流中提取码率"""
+    bitrate_sources = [
+        ('bit_rate', None),
+        ('max_bit_rate', None),
+        ('tags.BPS', 'tags'),
+        ('tags.variant_bitrate', 'tags'),
+        ('tags.BANDWIDTH', 'tags')
+    ]
+    
+    for key, parent in bitrate_sources:
+        try:
+            if parent:
+                value = stream.get(parent, {}).get(key.split('.')[-1], 0)
+            else:
+                value = stream.get(key, 0)
+            if value:
+                return int(value)
+        except (ValueError, TypeError):
+            continue
+    
+    return 0
+
+def parse_test_results(results: list, track_id: int) -> tuple:
+    """解析测试结果"""
+    probe_result = None
+    ping_time = 0.0
+    speed_info = {
+        'download_speed': 0.0,
+        'speed_test_status': False,
+        'speed_test_time': None
+    }
+
+    for i, result in enumerate(results):
+        if isinstance(result, Exception):
+            logger.error(f"任务 {i} 执行失败: {str(result)}")
+            continue
+            
+        if i == 0:  # FFmpeg探测结果
+            probe_result = result
+        elif i == 1:  # Ping结果
+            ping_time = result if isinstance(result, (int, float)) else 0.0
+        elif i == 2 and track_id:  # 测速结果
+            speed_info = result
+
+    return probe_result, ping_time, speed_info
+
+def get_default_stream_info() -> dict:
+    """获取默认的流媒体信息"""
+    return {
+        'video_codec': '',
+        'audio_codec': '',
+        'resolution': '',
+        'bitrate': 0,
+        'frame_rate': 0,
+        'ping_time': 0.0,
+        'download_speed': 0.0,
+        'speed_test_status': False,
+        'speed_test_time': None
+    }
 
 async def probe_stream(url: str) -> dict:
     """FFmpeg探测流"""
@@ -133,7 +181,13 @@ async def probe_stream(url: str) -> dict:
     probe_options = {
         'v': 'error',      # 只显示错误信息
         'timeout': '10',   # 设置超时时间为10秒
-        'show_entries': 'stream=codec_name,width,height,codec_type,bit_rate,r_frame_rate',
+        'show_entries': (
+            'stream=codec_name,width,height,codec_type,bit_rate,r_frame_rate,'
+            'avg_frame_rate,max_bit_rate,tags,'  # 添加平均帧率和最大码率
+            'format=bit_rate,size,duration'       # 添加格式信息
+        ),
+        'show_format': None,  # 显示格式信息
+        'show_streams': None  # 显示所有流信息
     }
     # 异步执行ffmpeg探测，并设置超时处理
     async def probe_with_timeout(timeout):
@@ -172,7 +226,8 @@ async def test_stream_track(track_id: int):
     
     for attempt in range(max_retries):
         try:
-            with get_db_connection() as conn:  # 增加连接超时
+            with get_db_connection() as conn:
+                logger.debug(f"获取数据库连接成功: track_id={track_id}")
                 c = conn.cursor()
                 c.execute("SELECT url FROM stream_tracks WHERE id = ?", (track_id,))
                 result = c.fetchone()
@@ -181,10 +236,12 @@ async def test_stream_track(track_id: int):
                     return
                 
                 url = result[0]
-                # 传入 track_id 以启用测速功能
+                logger.debug(f"开始测试频道URL: {url}, track_id={track_id}")
                 status, speed, stream_info = await test_stream_url(url, track_id)
+                logger.debug(f"频道测试完成: track_id={track_id}, status={status}, speed={speed}")
                 
                 # 更新测试结果
+                logger.debug(f"开始更新频道测试结果: track_id={track_id}")
                 c.execute(
                     """UPDATE stream_tracks SET 
                         test_status = ?, test_latency = ?, video_codec = ?, 
@@ -198,14 +255,14 @@ async def test_stream_track(track_id: int):
                      track_id)
                 )
                 conn.commit()
-                logger.info(f"频道测试结果已更新: {track_id}, 状态: {status}, 延迟: {speed}秒")
+                logger.info(f"频道测试结果已更新: track_id={track_id}, 状态={status}, 延迟={speed}秒")
                 break
         except sqlite3.OperationalError as e:
             if "locked" in str(e) and attempt < max_retries - 1:
-                logger.warning(f"数据库锁定，第{attempt+1}次重试...")
+                logger.warning(f"数据库锁定，第{attempt+1}次重试: track_id={track_id}")
                 await asyncio.sleep(retry_delay * (attempt + 1))
             else:
-                logger.error(f"更新测试结果失败: {str(e)}")
+                logger.error(f"更新测试结果失败: track_id={track_id}, 错误信息: {str(e)}", exc_info=True)
                 raise
 
 router = APIRouter()
@@ -430,92 +487,117 @@ def sync_test_stream_url(url: str, track_id: int) -> tuple[bool, float, dict]:
     finally:
         loop.close()
 
-async def test_download_speed(url: str, track_id: int) -> dict:
-    """使用yt-dlp库测试流媒体下载速度"""
-    logger.info(f"开始使用yt-dlp测速: {url}")
+async def test_download_speed(url: str, track_id: int, bitrate: int) -> dict:
+    """
+    使用ffmpeg测试流媒体下载速度
+    返回:
+        dict: 包含以下字段:
+            - download_speed: 下载速度 (Mbps)
+            - speed_test_status: 测试状态
+            - speed_test_time: 测试时间
+            - downloaded_bytes: 已下载字节数 (bytes)
+            - duration_seconds: 测试持续时间 (秒)
+    """
     start_time = time.time()
     downloaded = 0
     speed = 0.0
     status = False
     
     try:
-        # 配置yt-dlp选项
-        ydl_opts = {
-            'format': 'best',  # 选择最佳质量
-            'quiet': True,     # 不显示下载进度
-            'no_warnings': True,
-            'extract_flat': False,
-        }
+        import ffmpeg
+        
+        # 创建ffmpeg进程，设置超时和输出格式
+        process = (
+            ffmpeg
+            .input(url, t=10)  # 限制读取时间为10秒
+            .output('pipe:', format='null')  # 输出到空设备
+            .global_args(
+                '-loglevel', 'info',  # 设置日志级别
+                '-stats',             # 显示详细的统计信息
+                '-progress', 'pipe:2' # 将进度信息输出到stderr
+            )
+            .overwrite_output()
+            .run_async(pipe_stdout=True, pipe_stderr=True)
+        )
 
-        # 创建下载器实例并获取媒体片段信息
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(url, download=False)
-            if info and 'fragments' in info:
-                # 获取媒体片段列表
-                fragments = info.get('fragments', [])
-                if fragments:
-                    # 获取基础URL，用于处理相对路径
-                    base_url = info.get('url', '')
-                    parsed_base = urlparse(base_url or url)
-                    base_url = f"{parsed_base.scheme}://{parsed_base.netloc}{os.path.dirname(parsed_base.path)}/"
+        stderr_text = ''
+        current_speed = 0.0
+        downloaded = 0
 
-                    # 选择前几个片段进行测试
-                    test_fragments = fragments[:3]  # 测试前3个片段
-                    total_size = 0
-                    total_time = 0
-
-                    # 测试每个片段的下载速度
-                    async with aiohttp.ClientSession() as session:
-                        for fragment in test_fragments:
-                            fragment_url = fragment.get('url', '')
-                            if not fragment_url:
-                                continue
+        async def read_output():
+            nonlocal stderr_text, current_speed, downloaded
+            start_time = time.time()
+            while True:
+                try:
+                    line = await asyncio.get_event_loop().run_in_executor(
+                        None, 
+                        process.stderr.readline
+                    )
+                    if not line:
+                        break
+                    
+                    line = line.decode('utf-8', errors='ignore')
+                    stderr_text += line
+                    
+                    # 解析实时速度信息
+                    if line.startswith('frame='):
+                        # 解析时间和速度
+                        time_match = re.search(r'time=(\d+):(\d+):(\d+.\d+)', line)
+                        speed_match = re.search(r'speed=(\d+.\d+)x', line)
+                        
+                        if time_match and speed_match:
+                            # 计算已处理的时间（秒）
+                            h, m, s = time_match.groups()
+                            processed_time = float(h) * 3600 + float(m) * 60 + float(s)
                             
-                            # 处理相对路径
-                            if not urlparse(fragment_url).netloc:
-                                fragment_url = urljoin(base_url, fragment_url)
-
-                            start = time.time()
-                            try:
-                                async with session.get(fragment_url) as response:
-                                    if response.status == 200:
-                                        chunk = await response.read()
-                                        total_size += len(chunk)
-                                        total_time += time.time() - start
-                            except Exception as e:
-                                logger.error(f"片段下载失败: {fragment_url}, {str(e)}")
-                                continue
-
-                    # 计算平均速度
-                    if total_time > 0:
-                        speed = (total_size / (1024 * 1024)) / total_time
-                        status = speed > 0
-                        downloaded = total_size
-                        logger.info(f"测速结果: {url} 速度: {speed:.2f}MB/s 时长: {total_time:.1f}s")
-
-            else:
-                # 如果不是分片格式，使用常规下载测试
-                async with aiohttp.ClientSession() as session:
-                    async with session.get(url) as response:
-                        if response.status == 200:
-                            start = time.time()
-                            chunk_size = 8192
-                            while time.time() - start < 5:  # 测试5秒
-                                chunk = await response.content.read(chunk_size)
-                                if not chunk:
-                                    break
-                                downloaded += len(chunk)
+                            # 获取速度倍率
+                            speed_factor = float(speed_match.group(1))
                             
-                            duration = max(time.time() - start, 0.1)
-                            speed = (downloaded / (1024 * 1024)) / duration
-                            status = speed > 0
+                            # 修改：使用传入的码率计算实际下载速度，单位改为 Mbps
+                            current_speed = bitrate * speed_factor / (1024 * 1024)  # 转换为 Mbps
+                            
+                            # 计算已下载数据量
+                            downloaded = bitrate * processed_time
+                            duration = time.time() - start_time
+                            if duration > 0:
+                                current_speed = (downloaded / duration) / (1024 * 1024 / 8)  # 转换为 Mbps
+                                
+                except Exception as e:
+                    logger.error(f"读取输出错误: {str(e)}")
+                    break
+
+        # 启动输出读取任务
+        read_task = asyncio.create_task(read_output())
+        
+        try:
+            # 等待进程完成，最多10秒
+            await asyncio.wait_for(
+                asyncio.get_event_loop().run_in_executor(None, process.wait),
+                timeout=10
+            )
+        except asyncio.TimeoutError:
+            logger.warning(f"测速超时: {url}")
+        finally:
+            # 确保进程被终止和清理
+            try:
+                process.kill()
+            except:
+                pass
+            read_task.cancel()
+            
+            # 设置最终状态
+            status = current_speed > 0
+            speed = current_speed
+            logger.info(f"测速完成: {url}, 速度: {speed:.2f}Mbps")
 
     except Exception as e:
         logger.error(f"测速失败: {url}, {str(e)}")
         status = False
+        speed = 0.0
+        downloaded = 0
 
     return {
-        'download_speed': round(speed, 2),
+        'download_speed': round(speed, 2),  # 单位: Mbps
         'speed_test_status': status,
         'speed_test_time': datetime.now().isoformat(),
         'downloaded_bytes': downloaded,
@@ -525,6 +607,9 @@ async def test_download_speed(url: str, track_id: int) -> dict:
 def update_track_result(track_id: int, status: bool, speed: float, stream_info: dict):
     with get_db_connection() as conn:
         c = conn.cursor()
+        # 将 Mbps 转换为 MB/s (除以8)
+        download_speed = round(stream_info.get('download_speed', 0.0) / 8, 2)
+        
         c.execute(
             """UPDATE stream_tracks SET 
                 test_status = ?, test_latency = ?, video_codec = ?, 
@@ -536,7 +621,7 @@ def update_track_result(track_id: int, status: bool, speed: float, stream_info: 
              stream_info.get('audio_codec'), stream_info.get('resolution'),
              stream_info.get('bitrate'), stream_info.get('frame_rate'),
              stream_info.get('ping_time'), datetime.now().isoformat(),
-             stream_info.get('download_speed', 0.0),
+             download_speed,  # 使用转换后的速度值
              stream_info.get('speed_test_status', False),
              stream_info.get('speed_test_time'),
              track_id)
@@ -635,3 +720,44 @@ async def ping_url(url: str) -> float:
     except Exception as e:
         logger.error(f"Ping测试时发生错误: {str(e)}")
         return 0.0
+
+def extract_frame_rate(stream: dict) -> float:
+    """从视频流中提取帧率"""
+    for rate_key in ['r_frame_rate', 'avg_frame_rate']:
+        if stream.get(rate_key):
+            try:
+                num, den = map(int, stream[rate_key].split('/'))
+                if den != 0:
+                    return round(num / den, 2)
+            except (ValueError, ZeroDivisionError):
+                continue
+    return 0.0
+                
+async def extract_stream_info(probe_result: dict, ping_time: float, speed_info: dict) -> dict:
+    """Extract stream information from probe result"""
+    stream_info = get_default_stream_info()
+    stream_info.update({
+        'ping_time': ping_time,
+        'download_speed': speed_info.get('download_speed', 0.0),
+        'speed_test_status': speed_info.get('speed_test_status', False),
+        'speed_test_time': speed_info.get('speed_test_time')
+    })
+
+    if probe_result and isinstance(probe_result, dict) and 'streams' in probe_result:
+        # 获取码率
+        bitrate = await extract_bitrate(probe_result)
+        stream_info['bitrate'] = bitrate // 1000  # 转换为 Kbps
+        
+        for stream in probe_result.get('streams', []):
+            if 'codec_type' in stream:
+                
+                # 在 extract_stream_info 中使用
+                if stream['codec_type'] == 'video':
+                    stream_info['video_codec'] = stream.get('codec_name', '')
+                    if stream.get('width') and stream.get('height'):
+                        stream_info['resolution'] = f"{stream['width']}x{stream['height']}"
+                    stream_info['frame_rate'] = extract_frame_rate(stream)
+                elif stream['codec_type'] == 'audio':
+                    stream_info['audio_codec'] = stream.get('codec_name', '')
+
+    return stream_info
