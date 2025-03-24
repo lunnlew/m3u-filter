@@ -35,3 +35,11 @@ jobs:
         tags: |
           ${{ secrets.DOCKER_USERNAME }}/m3u-filter:${{ env.TAG_NAME }}
           ${{ secrets.DOCKER_USERNAME }}/m3u-filter:latest
+
+    - name: Install Flyctl
+      run: curl -L https://fly.io/install.sh | sh
+
+    - name: Deploy to Fly.io
+      run: flyctl deploy --remote-only
+      env:
+        FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
