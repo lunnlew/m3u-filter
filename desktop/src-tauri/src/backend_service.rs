@@ -48,7 +48,7 @@ pub fn start_backend_service() -> Result<(), String> {
             .map_err(|e| format!("Failed to open log file: {}", e))?;
 
         #[cfg(target_os = "windows")]
-        let mut command = Command::new(backend_path.as_os_str())
+        let mut backend_command = Command::new(backend_path.as_os_str())
             .creation_flags(0x08000000); // CREATE_NO_WINDOW
 
         #[cfg(any(target_os = "linux", target_os = "macos"))]
