@@ -52,8 +52,7 @@ jobs:
       run: |
         brew install pkg-config
         brew install gtk+3 
-        brew install webkitgtk
-        export PKG_CONFIG_PATH="/usr/local/opt/webkitgtk/lib/pkgconfig:$PKG_CONFIG_PATH"
+        export PKG_CONFIG_PATH="/usr/local/opt/libffi/lib/pkgconfig:$PKG_CONFIG_PATH"
 
     - name: Setup Rust
       uses: actions-rs/toolchain@v1
