@@ -43,16 +43,12 @@ jobs:
         sudo apt-get install -y \
           libglib2.0-dev \
           libgtk-3-dev \
-          libwebkit2gtk-4.0-dev \
-          libayatana-appindicator3-dev
 
     - name: Install macOS dependencies
       if: matrix.os == 'macos-latest'
       run: |
         brew install pkg-config
         brew install gtk+3 
-        brew install gdk-pixbuf
-        export PKG_CONFIG_PATH="/usr/local/opt/libffi/lib/pkgconfig:$PKG_CONFIG_PATH"
 
     - name: Setup Rust
       uses: actions-rs/toolchain@v1
