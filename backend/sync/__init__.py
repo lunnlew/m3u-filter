@@ -466,8 +466,17 @@ def parse_txt_content(content: str) -> List[Dict[str, str]]:
     """
     channels = []
     current_group = None
+    # 标准化换行符
+    content = content.replace('\r\n', '\n').replace('\r', '\n')
+    # 移除 BOM
+    content = content.strip('\ufeff')
+    # 打印更详细的调试信息
+    lines = content.splitlines()
+    print(f"[解析TXT] 总行数: {len(lines)}")
+    print(f"[解析TXT] 原始内容长度: {len(content)}")
+    print(f"[解析TXT] 非空行数: {len([line for line in lines if line.strip()])}")
     
-    for line in content.splitlines():
+    for line in lines:
         line = line.strip()
         if not line or line.startswith('#'):
             continue

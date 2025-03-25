@@ -58,6 +58,11 @@ export const StreamSourceList: React.FC = () => {
       render: (text: string | null) => text || '-',
     },
     {
+      title: '同步周期',
+      key: 'sync_interval',
+      render: (_: any, record: StreamSource) => record.sync_interval + '小时'
+    },
+    {
       title: '最后更新时间',
       dataIndex: 'last_update',
       key: 'last_update',
