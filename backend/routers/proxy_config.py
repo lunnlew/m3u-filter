@@ -3,7 +3,8 @@ import sqlite3
 from models import ProxyConfig
 from database import get_db_connection
 from models import BaseResponse
-
+import logging
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 @router.get("/proxy-config")

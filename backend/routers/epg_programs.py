@@ -2,7 +2,8 @@ from fastapi import APIRouter, HTTPException
 from typing import List, Optional
 from database import get_db_connection
 from models import BaseResponse
-
+import logging
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 @router.get("/epg-programs")

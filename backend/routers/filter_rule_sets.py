@@ -8,7 +8,8 @@ from models import BaseResponse
 from pathlib import Path
 from datetime import datetime
 import json
-
+import logging
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 # 配置静态文件目录路径

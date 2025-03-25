@@ -7,7 +7,8 @@ from models import BaseResponse
 from sync import sync_epg_source, sync_all_active_sources
 from scheduler import update_source_schedule, get_source_next_run
 from database import get_db_connection
-
+import logging
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 @router.get("/epg-sources")

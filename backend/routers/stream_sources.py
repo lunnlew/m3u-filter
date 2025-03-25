@@ -7,7 +7,8 @@ from sync import sync_stream_source
 from database import get_db_connection
 from scheduler import update_stream_schedule
 from models import BaseResponse
-
+import logging
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 @router.get("/stream-sources")

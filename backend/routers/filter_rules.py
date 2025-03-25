@@ -3,7 +3,8 @@ from database import get_db_connection
 from models import BaseResponse
 from m3u_generator import M3UGenerator
 from models import FilterRule
-
+import logging
+logger = logging.getLogger(__name__)
 from pathlib import Path
 
 router = APIRouter()

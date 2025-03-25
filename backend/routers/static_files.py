@@ -3,7 +3,8 @@ from fastapi.responses import FileResponse, HTMLResponse
 from pathlib import Path
 import os
 import mimetypes
-
+import logging
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 # 配置静态文件目录路径

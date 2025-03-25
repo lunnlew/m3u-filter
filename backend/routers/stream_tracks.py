@@ -1,12 +1,10 @@
 from fastapi import APIRouter, HTTPException, BackgroundTasks
-from typing import List, Optional
+from typing import List, Optional, Tuple
 import sqlite3
 from datetime import datetime
 import aiohttp
 import asyncio
-import logging
 
-from sqlalchemy import False_
 from models import StreamTrack
 from database import get_db_connection
 from typing import Dict
@@ -16,23 +14,29 @@ from urllib.parse import urlparse, urljoin
 from concurrent.futures import ThreadPoolExecutor
 from functools import partial
 import re  # 添加 re 模块导入
-
-logger = logging.getLogger(__name__)
-
-# 在文件开头导入部分添加
-import yt_dlp
-import os
 import time
+
+import logging
+logger = logging.getLogger(__name__)
 
 # 修改 test_stream_url 函数，添加测速逻辑
 async def test_stream_url(url: str, track_id: int = None) -> tuple[bool, float, dict]:
-    try:
-        start_time = datetime.now()
-        logger.info(f"开始测试流媒体URL: {url}, track_id: {track_id}")
+    start_time = datetime.now()
+    logger.info(f"开始测试流媒体URL: {url}, track_id: {track_id}")
 
-        # 首先执行探测任务获取码率信息
+    # 检查是否应该跳过该域名
+    if should_skip_domain(url):
+        logger.warning(f"跳过测试频繁失败的域名: {get_domain_key(url)}")
+        return False, 0.0, get_default_stream_info()
+
+    try:
+        # 执行探测任务获取码率信息
         logger.debug(f"开始执行FFmpeg探测: {url}")
         probe_result = await probe_stream(url)
+        if not probe_result:
+            record_domain_failure(url, "FFmpeg探测失败")
+            logger.warning(f"FFmpeg探测失败或返回空结果: {url}")
+            return False, 0.0, get_default_stream_info()
         logger.debug(f"FFmpeg探测完成: {url}")
         
         # 从探测结果中获取码率
@@ -45,7 +49,7 @@ async def test_stream_url(url: str, track_id: int = None) -> tuple[bool, float, 
         ping_time = await ping_url(url)
         logger.debug(f"Ping测试完成: {url}, ping_time: {ping_time}ms")
         
-        # 如果提供了track_id，则创建并执行下载速度测试
+        # 执行下载速度测试
         logger.debug(f"开始执行下载速度测试: {url}")
         speed_info = await test_download_speed(url, track_id, bitrate) if track_id else {
             'download_speed': 0.0,
@@ -64,11 +68,13 @@ async def test_stream_url(url: str, track_id: int = None) -> tuple[bool, float, 
 
         # 根据速度测试结果确定状态
         status = speed_info.get('speed_test_status', False)
-        logger.info(f"流媒体测试完成: {url}, 状态: {status}, 延迟: {duration}秒, 信息: {stream_info}")
+        logger.info(f"流媒体测试完成: {url}, 状态: {status}, 延迟: {duration}秒")
         return status, duration, stream_info
 
     except Exception as e:
-        logger.error(f"测试流媒体URL时发生错误: {url}, 错误信息: {str(e)}", exc_info=True)
+        # 记录域名失败
+        record_domain_failure(url, str(e))
+        logger.error(f"测试流媒体URL时发生错误: {url}, 错误信息: {str(e)}")
         return False, 0.0, get_default_stream_info()
 
 async def extract_bitrate(probe_result: dict) -> int:
@@ -169,29 +175,26 @@ def get_default_stream_info() -> dict:
 
 async def probe_stream(url: str) -> dict:
     """FFmpeg探测流"""
-    # 检查ffmpeg是否可用
     try:
         import ffmpeg
     except ImportError:
-        logger.error("ffmpeg-python库未安装，请先安装该库")
-        raise ImportError("ffmpeg-python库未安装，请先安装该库")
+        logger.error("ffmpeg-python库未安装")
+        return {}
 
-    logger.info(f"开始测试流媒体URL: {url}")
     # 设置ffmpeg探测参数
     probe_options = {
         'v': 'error',      # 只显示错误信息
         'timeout': '10',   # 设置超时时间为10秒
         'show_entries': (
             'stream=codec_name,width,height,codec_type,bit_rate,r_frame_rate,'
-            'avg_frame_rate,max_bit_rate,tags,'  # 添加平均帧率和最大码率
-            'format=bit_rate,size,duration'       # 添加格式信息
+            'avg_frame_rate,max_bit_rate,tags,'
+            'format=bit_rate,size,duration'
         ),
-        'show_format': None,  # 显示格式信息
-        'show_streams': None  # 显示所有流信息
+        'show_format': None,
+        'show_streams': None
     }
     # 异步执行ffmpeg探测，并设置超时处理
     async def probe_with_timeout(timeout):
-        proc = None
         try:
             probe_future = asyncio.get_event_loop().run_in_executor(
                 None,
@@ -199,24 +202,31 @@ async def probe_stream(url: str) -> dict:
             )
             return await asyncio.wait_for(probe_future, timeout)
         except ffmpeg.Error as fe:
-            raise Exception(f"FFmpeg探测失败: {url}, {str(getattr(fe, 'stderr', str(fe)))}")
+            logger.error(f"FFmpeg探测失败: {url}, {str(getattr(fe, 'stderr', str(fe)))}")
+            return {}
         except asyncio.TimeoutError:
-            # 在超时时尝试终止ffmpeg进程
-            import psutil
-            for proc in psutil.process_iter(['pid', 'name']):
-                try:
+            logger.error(f"FFmpeg探测超时: {url}")
+            # 清理超时进程
+            try:
+                import psutil
+                for proc in psutil.process_iter(['pid', 'name']):
                     if 'probe' in proc.info['name'].lower():
                         proc.kill()
-                except (psutil.NoSuchProcess, psutil.AccessDenied):
-                    pass
-            raise TimeoutError("probe探测超时")
+            except Exception as e:
+                logger.error(f"清理FFmpeg进程失败: {str(e)}")
+            return {}
         except Exception as e:
-            logger.error(f"probe探测失败: {url}, {str(e)}")
-            raise
+            logger.error(f"FFmpeg探测出现未知错误: {url}, {str(e)}")
+            return {}
 
-    probe = await probe_with_timeout(5)
-    logger.error(f"ffmpeg探测成功: {url}")
-    return probe
+    try:
+        probe = await probe_with_timeout(5)
+        if probe:
+            logger.info(f"FFmpeg探测成功: {url}")
+        return probe
+    except Exception as e:
+        logger.error(f"FFmpeg探测过程出现异常: {url}, {str(e)}")
+        return {}
 
 async def test_stream_track(track_id: int):
     logger.info(f"开始测试频道ID: {track_id}")
@@ -398,6 +408,10 @@ async def process_batch_tasks(task_id: int, track_ids: list):
     batch_size = 10
     results = {}
     
+    # 检查IPv6可访问性
+    ipv6_available = await check_ipv6_connectivity()
+    logger.info(f"IPv6可访问性检查结果: {ipv6_available}")
+    
     try:
         async def process_single_track(track_id: int):
             async with semaphore:
@@ -412,6 +426,21 @@ async def process_batch_tasks(task_id: int, track_ids: list):
                             'track_id': track_id,
                             'status': 'failed',
                             'error': 'URL not found',
+                            'timestamp': datetime.now().isoformat()
+                        }
+                    
+                    # 检查URL是否是IPv6地址
+                    parsed_url = urlparse(url)
+                    host = parsed_url.hostname
+                    is_ipv6 = ':' in host if host else False
+                    
+                    # 如果是IPv6地址但IPv6不可用，则跳过测试
+                    if is_ipv6 and not ipv6_available:
+                        logger.warning(f"跳过IPv6地址测试 (IPv6不可用): {url}")
+                        return {
+                            'track_id': track_id,
+                            'status': 'skipped',
+                            'error': 'IPv6 not available',
                             'timestamp': datetime.now().isoformat()
                         }
                     
@@ -766,3 +795,99 @@ async def extract_stream_info(probe_result: dict, ping_time: float, speed_info: 
                     stream_info['audio_codec'] = stream.get('codec_name', '')
 
     return stream_info
+
+
+async def check_ipv6_connectivity() -> bool:
+    """
+    检查系统是否支持IPv6连接
+    返回:
+        bool: 如果IPv6可用返回True，否则返回False
+    """
+    ipv6_test_hosts = [
+        "2001:4860:4860::8888",  # Google DNS
+        "2606:4700:4700::1111",  # Cloudflare DNS
+        "2400:3200::1",          # Alibaba DNS
+    ]
+    
+    for host in ipv6_test_hosts:
+        try:
+            ping_result = ping(host, timeout=2)
+            if ping_result is not None and ping_result is not False:
+                logger.info(f"IPv6连接测试成功: {host}")
+                return True
+        except Exception as e:
+            logger.debug(f"IPv6测试失败 ({host}): {str(e)}")
+            continue
+    
+    logger.warning("系统不支持IPv6连接")
+    return False
+
+# 添加失败计数器相关的常量和缓存
+FAILURE_THRESHOLD = 4  # 允许的最大失败次数
+FAILURE_WINDOW = 300  # 失败记录的有效期（秒）
+FAILURE_DECAY_TIME = 1800  # 失败次数衰减时间（秒）
+
+# 域名失败计数缓存
+domain_failures: Dict[str, List[Tuple[datetime, str]]] = {}
+
+def get_domain_key(url: str) -> str:
+    """从URL中提取域名/IP和端口作为键"""
+    try:
+        parsed_url = urlparse(url)
+        host = parsed_url.hostname or ''
+        port = parsed_url.port or ('443' if parsed_url.scheme == 'https' else '80')
+        return f"{host}:{port}"
+    except Exception as e:
+        logger.error(f"解析URL失败: {url}, 错误: {str(e)}")
+        return url
+
+def record_domain_failure(url: str, error: str) -> bool:
+    """
+    记录域名失败并返回是否应该跳过该域名
+    返回: 如果应该跳过返回True，否则返回False
+    """
+    domain_key = get_domain_key(url)
+    now = datetime.now()
+    
+    # 清理过期的失败记录
+    if domain_key in domain_failures:
+        domain_failures[domain_key] = [
+            (t, e) for t, e in domain_failures[domain_key]
+            if (now - t).total_seconds() < FAILURE_WINDOW
+        ]
+    
+    # 添加新的失败记录
+    if domain_key not in domain_failures:
+        domain_failures[domain_key] = []
+    domain_failures[domain_key].append((now, error))
+    
+    # 计算当前失败次数
+    recent_failures = len(domain_failures[domain_key])
+    
+    # 如果失败次数超过阈值，记录警告日志
+    if recent_failures >= FAILURE_THRESHOLD:
+        logger.warning(f"域名 {domain_key} 在 {FAILURE_WINDOW} 秒内失败 {recent_failures} 次，暂时跳过测试")
+        return True
+    
+    return False
+
+def should_skip_domain(url: str) -> bool:
+    """检查是否应该跳过该域名的测试"""
+    domain_key = get_domain_key(url)
+    if domain_key not in domain_failures:
+        return False
+    
+    now = datetime.now()
+    # 清理过期的失败记录
+    domain_failures[domain_key] = [
+        (t, e) for t, e in domain_failures[domain_key]
+        if (now - t).total_seconds() < FAILURE_WINDOW
+    ]
+    
+    # 如果没有最近的失败记录，删除该域名的记录
+    if not domain_failures[domain_key]:
+        del domain_failures[domain_key]
+        return False
+    
+    # 检查失败次数是否超过阈值
+    return len(domain_failures[domain_key]) >= FAILURE_THRESHOLD

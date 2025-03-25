@@ -7,6 +7,9 @@ from database import get_db_connection
 from routers.stream_tracks import test_stream_track
 from routers.filter_rule_sets import generate_m3u_file
 
+import logging
+logger = logging.getLogger(__name__)
+
 scheduler = AsyncIOScheduler()
 
 async def test_all_stream_tracks():

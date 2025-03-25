@@ -8,7 +8,8 @@ from datetime import datetime
 import xml.etree.ElementTree as ET
 import os
 from config import BASE_URL, STATIC_URL_PREFIX
-
+import logging
+logger = logging.getLogger(__name__)
 from pathlib import Path
 
 router = APIRouter()

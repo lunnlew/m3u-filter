@@ -5,7 +5,8 @@ from database import get_db_connection
 import sqlite3
 from utils import is_url_in_whitelist, download_and_save_logo
 from models import BaseResponse
-
+import logging
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 class ChannelLogoBase(BaseModel):

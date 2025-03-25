@@ -4,6 +4,8 @@ from contextlib import contextmanager
 from typing import Optional
 from datetime import datetime
 
+import logging
+logger = logging.getLogger(__name__)
 # 创建数据库连接池
 db_pool = Queue(maxsize=5)
 

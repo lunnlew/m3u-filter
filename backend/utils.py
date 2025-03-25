@@ -7,6 +7,8 @@ import re
 from urllib.parse import urlparse
 from config import LOGO_URL_WHITELIST, STATIC_DIR, LOGO_STATIC_DIR
 from database import get_db_connection
+import logging
+logger = logging.getLogger(__name__)
 
 def is_url_in_whitelist(url: str) -> bool:
     """检查URL是否在白名单中或是相对路径"""

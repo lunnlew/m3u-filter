@@ -1,7 +1,8 @@
 from fastapi import APIRouter
 from config import BASE_URL, STATIC_URL_PREFIX
 from models import BaseResponse
-
+import logging
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 @router.get("/site-config")

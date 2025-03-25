@@ -10,4 +10,3 @@ bs4
 aiofiles
 psutil
 ping3
-yt-dlp
