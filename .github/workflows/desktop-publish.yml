@@ -41,10 +41,20 @@ jobs:
         toolchain: stable
         override: true
 
-    - name: Install dependencies
+    - name: Install desktop dependencies
       run: |
         cd desktop
         pnpm install --no-frozen-lockfile
+    
+    - name: Install frontend dependencies
+      run: |
+        cd frontend
+        pnpm install --no-frozen-lockfile
+
+    - name: Install Backend dependencies
+      run: |
+        cd backend
+        pip install -r requirements.txt --no-cache-dir
 
     - name: Build desktop app
       run: |
