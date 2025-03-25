@@ -112,7 +112,6 @@ jobs:
       with:
         allowUpdates: true
         artifacts: |
-          # 按平台区分安装包路径
           desktop/src-tauri/target/release/bundle/${{ matrix.os == 'windows-latest' && 'msi/*.msi' || '' }}
           desktop/src-tauri/target/release/bundle/${{ matrix.os == 'macos-latest' && 'dmg/*.dmg' || '' }}
           desktop/src-tauri/target/release/bundle/${{ matrix.os == 'ubuntu-latest' && 'appimage/*.AppImage' || '' }}
