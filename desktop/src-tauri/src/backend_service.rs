@@ -3,7 +3,12 @@ use std::sync::Mutex;
 use std::thread;
 use std::time::Duration;
 use reqwest::blocking::Client;
-use std::os::windows::process::CommandExt; // Import CommandExt trait
+
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
+
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+use std::os::unix::process::CommandExt;
 
 static BACKEND_PROCESS: Mutex<Option<Child>> = Mutex::new(None);
 const MAX_RETRIES: u32 = 3;
@@ -42,12 +47,26 @@ pub fn start_backend_service() -> Result<(), String> {
             .open(&log_path)
             .map_err(|e| format!("Failed to open log file: {}", e))?;
 
-        let mut process = Command::new(backend_path.as_os_str())
-            .creation_flags(0x08000000) // CREATE_NO_WINDOW
+        #[cfg(target_os = "windows")]
+        let mut command = Command::new(backend_path.as_os_str())
+            .creation_flags(0x08000000); // CREATE_NO_WINDOW
+
+        #[cfg(any(target_os = "linux", target_os = "macos"))]
+        let mut command = Command::new(backend_path.as_os_str())
+            .before_exec(|| {
+                // 在Unix系统上设置进程为守护进程
+                if let Ok(()) = daemon::daemonize() {
+                    Ok(())
+                } else {
+                    Ok(()) // 即使守护进程化失败也继续运行
+                }
+            });
+
+        let mut process = command
             .stdout(log_file.try_clone().map_err(|e| format!("Failed to clone log file handle: {}", e))?)
             .stderr(log_file)
             .spawn()
-            .map_err(|e| format!("Failed to start backend service: m3u-filter-service.exe: {}", e))?;
+            .map_err(|e| format!("Failed to start backend service: {}", e))?;
 
         // 等待服务启动并进行健康检查
         for _ in 0..10 {
