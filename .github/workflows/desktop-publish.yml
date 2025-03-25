@@ -35,7 +35,7 @@ jobs:
     - name: Install dependencies
       run: |
         cd desktop
-        pnpm install
+        pnpm install --no-frozen-lockfile
 
     - name: Build desktop app
       run: |
