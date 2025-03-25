@@ -112,7 +112,9 @@ jobs:
       with:
         allowUpdates: true
         artifacts: |
-          desktop/src-tauri/target/release/bundle/*/*
-          backend/dist/*
+          desktop/src-tauri/target/release/bundle/msi/*.msi
+          desktop/src-tauri/target/release/bundle/dmg/*.dmg
+          desktop/src-tauri/target/release/bundle/appimage/*.AppImage
+          desktop/src-tauri/target/release/bundle/deb/*.deb
         artifactErrorsFailBuild: true
         token: ${{ secrets.GITHUB_TOKEN }}
