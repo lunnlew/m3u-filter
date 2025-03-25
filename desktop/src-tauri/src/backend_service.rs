@@ -53,13 +53,8 @@ pub fn start_backend_service() -> Result<(), String> {
 
         #[cfg(any(target_os = "linux", target_os = "macos"))]
         let mut command = Command::new(backend_path.as_os_str())
-            .before_exec(|| {
-                // 在Unix系统上设置进程为守护进程
-                if let Ok(()) = daemon::daemonize() {
-                    Ok(())
-                } else {
-                    Ok(()) // 即使守护进程化失败也继续运行
-                }
+            .pre_exec(|| {
+                Ok(())
             });
 
         let mut process = command
