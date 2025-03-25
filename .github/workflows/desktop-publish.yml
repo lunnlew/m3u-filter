@@ -50,7 +50,11 @@ jobs:
           build-essential \
           cmake pkg-config git squashfs-tools \
           linux-modules-extra-$(uname -r) \
-          libfuse2 libfuse-dev
+          libfuse2 libfuse-dev \
+          zsync \
+          desktop-file-utils \
+          appstream \
+          patchelf
 
     - name: Install macOS dependencies
       if: matrix.os == 'macos-latest'
@@ -99,6 +103,13 @@ jobs:
       id: get_tag
       shell: bash
       run: echo "TAG_NAME=${GITHUB_REF##*/}" >> $GITHUB_ENV
+
+    - name: Install linuxdeploy (Ubuntu)
+      if: matrix.os == 'ubuntu-latest'
+      run: |
+        wget https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
+        chmod +x linuxdeploy-x86_64.AppImage
+        sudo mv linuxdeploy-x86_64.AppImage /usr/local/bin/linuxdeploy
 
     - name: Upload artifacts
       uses: actions/upload-artifact@v4
