@@ -360,8 +360,13 @@ async def test_single_track(track_id: int, background_tasks: BackgroundTasks):
 async def test_all_tracks():
     with get_db_connection() as conn:
         c = conn.cursor()
-        # c.execute("SELECT id FROM stream_tracks WHERE last_test_time < datetime('now','-6 hours') OR last_test_time IS NULL")
-        c.execute("SELECT id FROM stream_tracks")
+        c.execute("""
+            SELECT id FROM stream_tracks 
+            WHERE last_test_time < datetime('now','-6 hours') 
+               OR last_test_time IS NULL
+               OR download_speed IS NULL
+               OR download_speed = 0
+        """)
         track_ids = [row[0] for row in c.fetchall()]
         
         # 创建任务记录

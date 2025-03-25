@@ -306,13 +306,7 @@ async def generate_m3u_file(
     sort_by: str = 'display_name',
     group_order: List[str] = []
 ):
-    """根据规则集合生成M3U文件
-    
-    Args:
-        set_id: 规则集合ID
-        sort_by: 排序字段，可选值：display_name, group_title 等
-        group_order: 分组顺序列表，例如 ["央视", "卫视", "地方台"]
-    """
+    """根据规则集合生成M3U文件"""
     with get_db_connection() as conn:
         cursor = conn.cursor()
         # 获取规则集合
@@ -325,6 +319,7 @@ async def generate_m3u_file(
             raise HTTPException(status_code=400, detail="Rule set is disabled")
         
         # 获取所有频道
+        # 修改获取频道的SQL查询，添加download_speed字段
         cursor.execute("""
             SELECT
                 stream_tracks.id,
@@ -333,6 +328,7 @@ async def generate_m3u_file(
                 stream_tracks.group_title,
                 stream_tracks.catchup,
                 stream_tracks.catchup_source,
+                stream_tracks.download_speed,
                 epg_channels.channel_id,
                 epg_channels.language,
                 epg_channels.category,
@@ -364,12 +360,31 @@ async def generate_m3u_file(
         # 使用规则树过滤频道
         filtered_channels = rule_tree.filter_channels(channels)
 
+        # 按分组和频道名称对频道进行分组
+        grouped_channels = {}
+        for channel in filtered_channels:
+            group = channel.get('group_title', 'Unknown')
+            name = channel.get('display_name', '')
+            key = (group, name)  # 使用分组和名称的元组作为键
+            if key not in grouped_channels:
+                grouped_channels[key] = []
+            grouped_channels[key].append(channel)
+
+        # 对每个分组下的同名频道按download_speed排序并只保留前2个
+        final_channels = []
+        for (group, name), channels in grouped_channels.items():
+            sorted_channels = sorted(
+                channels, 
+                key=lambda x: float(x.get('download_speed', 0) or 0), 
+                reverse=True
+            )
+            final_channels.extend(sorted_channels[:2])
+
+
         # 使用规则集合名称作为文件名
         filename = f"{rule_set[1]}"
-        # 确保文件名合法
         filename = ''.join(c for c in filename if c.isalnum() or c in ('_', '-', '.'))
         
-        # 使用M3UGenerator生成M3U文件
         generator = M3UGenerator()
         header_info = {
             "generated_at": datetime.now().isoformat(),
@@ -377,7 +392,7 @@ async def generate_m3u_file(
         }
 
         m3u_content, filename = generator.generate_m3u(
-            filtered_channels, 
+            final_channels,  # 使用处理后的频道列表
             [filename], 
             header_info,
             sort_by=sort_by,
