@@ -105,7 +105,7 @@ jobs:
           desktop/src-tauri/target/release/bundle/dmg/*.dmg
           desktop/src-tauri/target/release/bundle/appimage/*.AppImage
           desktop/src-tauri/target/release/bundle/deb/*.deb
-          backend/dist/*  # 新增PyInstaller输出目录
+          backend/dist/*
 
     - name: Create Release
       uses: ncipollo/release-action@v1.14.0
