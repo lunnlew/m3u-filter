@@ -52,11 +52,11 @@ pub fn start_backend_service() -> Result<(), String> {
             .creation_flags(0x08000000); // CREATE_NO_WINDOW
 
         #[cfg(any(target_os = "linux", target_os = "macos"))]
+        let mut backend_command = Command::new(backend_path.as_os_str());
         let command = unsafe {
-            Command::new(backend_path.as_os_str())
-                .pre_exec(|| {
-                    Ok(())
-                })
+            backend_command.pre_exec(|| {
+                Ok(())
+            })
         };
 
         let mut process = command
