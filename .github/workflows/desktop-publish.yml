@@ -112,7 +112,7 @@ jobs:
           desktop/src-tauri/target/release/bundle/${{ 
             matrix.os == 'windows-latest' && 'msi/*.msi' || 
             matrix.os == 'macos-latest' && 'dmg/*.dmg' || 
-            matrix.os == 'ubuntu-latest' && 'appimage/*.AppImage deb/*.deb rpm/*.rpm' 
+            matrix.os == 'ubuntu-latest' && 'deb/*.deb rpm/*.rpm' 
           }}
 
     - name: Create Release
@@ -123,7 +123,7 @@ jobs:
           desktop/src-tauri/target/release/bundle/${{ 
             matrix.os == 'windows-latest' && 'msi/*.msi' || 
             matrix.os == 'macos-latest' && 'dmg/*.dmg' || 
-            matrix.os == 'ubuntu-latest' && 'appimage/*.AppImage deb/*.deb rpm/*.rpm' 
+            matrix.os == 'ubuntu-latest' && 'deb/*.deb rpm/*.rpm' 
           }}
         artifactErrorsFailBuild: true
         token: ${{ secrets.GITHUB_TOKEN }}
