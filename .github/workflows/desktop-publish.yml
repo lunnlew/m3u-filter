@@ -7,6 +7,10 @@ on:
 
 jobs:
   build:
+    # Add permissions at the job level
+    permissions:
+      contents: write  # Required for release creation
+      
     strategy:
       matrix:
         os: [windows-latest, macos-latest, ubuntu-latest]
@@ -105,11 +109,10 @@ jobs:
 
     - name: Create Release
       uses: ncipollo/release-action@v1.14.0
-      if: startsWith(github.ref, 'refs/tags/')
       with:
         allowUpdates: true
         artifacts: |
-          desktop/src-tauri/target/release/bundle/*/*  
+          desktop/src-tauri/target/release/bundle/*/*
           backend/dist/*
         artifactErrorsFailBuild: true
         token: ${{ secrets.GITHUB_TOKEN }}
