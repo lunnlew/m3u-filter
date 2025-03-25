@@ -345,8 +345,8 @@ async def sync_stream_source(source_id: int):
                 # 插入新的频道数据
                 for channel in channels:
                     c.execute(
-                        "INSERT INTO stream_tracks (source_id, name, url, group_title, tvg_id, tvg_name, tvg_logo, tvg_language, catchup, catchup_source) "
-                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                        "INSERT INTO stream_tracks (source_id, name, url, group_title, tvg_id, tvg_name, tvg_logo, tvg_language, route_info, catchup, catchup_source) "
+                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                         (
                             source_id,
                             channel.get('name'),
@@ -356,6 +356,7 @@ async def sync_stream_source(source_id: int):
                             channel.get('tvg-name'),
                             channel.get('tvg-logo'),
                             channel.get('tvg-language'),
+                            channel.get('route_info'),
                             tvg_channel.get('catchup'),
                             tvg_channel.get('catchup_source')
                         )
@@ -463,6 +464,7 @@ def parse_txt_content(content: str) -> List[Dict[str, str]]:
     3. 单行播放地址（使用URL最后一段作为频道名）
     4. 分组名,#genre#
        频道名,播放地址
+    5. 频道名,播放地址$线路信息
     """
     channels = []
     current_group = None
@@ -470,6 +472,7 @@ def parse_txt_content(content: str) -> List[Dict[str, str]]:
     content = content.replace('\r\n', '\n').replace('\r', '\n')
     # 移除 BOM
     content = content.strip('\ufeff')
+    
     # 打印更详细的调试信息
     lines = content.splitlines()
     print(f"[解析TXT] 总行数: {len(lines)}")
@@ -492,23 +495,35 @@ def parse_txt_content(content: str) -> List[Dict[str, str]]:
         
         if len(parts) == 1:  # 仅包含URL
             url = parts[0].strip()
+            # 处理可能存在的$后缀
+            url_parts = url.split('$', 1)
+            url = url_parts[0]
+            route_info = url_parts[1] if len(url_parts) > 1 else None
             # 从URL中提取名称（使用最后一段，去除扩展名）
             name = url.split('/')[-1].split('?')[0].rsplit('.', 1)[0]
             channel = {
                 'name': name,
-                'url': url
+                'url': url,
+                'route_info': route_info
             }
-        elif len(parts) == 2:  # 名称,URL格式
-            channel = {
-                'name': parts[0].strip(),
-                'url': parts[1].strip()
-            }
-        elif len(parts) >= 3:  # 名称,分组,URL格式
-            channel = {
-                'name': parts[0].strip(),
-                'group-title': parts[1].strip(),
-                'url': parts[2].strip()
-            }
+        elif len(parts) >= 2:  # 名称,URL格式 或 名称,分组,URL格式
+            name = parts[0].strip()
+            if len(parts) >= 3:  # 名称,分组,URL格式
+                channel['group-title'] = parts[1].strip()
+                url_part = parts[2].strip()
+            else:  # 名称,URL格式
+                url_part = parts[1].strip()
+            
+            # 处理URL中的$后缀
+            url_parts = url_part.split('$', 1)
+            url = url_parts[0]
+            route_info = url_parts[1] if len(url_parts) > 1 else None
+            
+            channel.update({
+                'name': name,
+                'url': url,
+                'route_info': route_info
+            })
         
         if channel and channel.get('url'):
             # 如果当前有分组，且channel中没有group-title，则添加分组信息
