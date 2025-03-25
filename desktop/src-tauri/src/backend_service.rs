@@ -18,11 +18,17 @@ fn check_service_health() -> bool {
 }
 
 pub fn start_backend_service() -> Result<(), String> {
+    let exe_name = if cfg!(target_os = "windows") {
+        "m3u-filter-service.exe"
+    } else {
+        "m3u-filter-service"
+    };
+
     let backend_path = std::env::current_exe()
         .map_err(|e| format!("Failed to get current exe path: {}", e))?
         .parent()
         .ok_or_else(|| "Failed to get parent directory".to_string())?
-        .join("m3u-filter-service.exe");
+        .join(exe_name);
 
     // 创建日志文件路径
     let log_path = backend_path.parent()

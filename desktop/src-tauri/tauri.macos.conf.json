@@ -1,0 +1,7 @@
+{
+  "bundle": {
+    "resources": {
+      "../../backend/dist/m3u_filter_backend": "m3u-filter-service"
+    }
+  }
+}

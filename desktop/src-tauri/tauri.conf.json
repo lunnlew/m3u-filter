@@ -45,9 +45,6 @@
       "providerShortName": null,
       "signingIdentity": null
     },
-    "resources": {
-      "../../backend/dist/m3u_filter_backend.exe": "m3u-filter-service.exe"
-    },
     "shortDescription": "",
     "targets": "all",
     "windows": {
