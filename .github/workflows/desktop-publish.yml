@@ -40,7 +40,7 @@ jobs:
     - name: Build desktop app
       run: |
         cd desktop
-        pnpm tauri build
+        pnpm build
 
     - name: Extract tag name
       id: get_tag
