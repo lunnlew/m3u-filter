@@ -52,10 +52,12 @@ pub fn start_backend_service() -> Result<(), String> {
             .creation_flags(0x08000000); // CREATE_NO_WINDOW
 
         #[cfg(any(target_os = "linux", target_os = "macos"))]
-        let mut command = Command::new(backend_path.as_os_str())
-            .pre_exec(|| {
-                Ok(())
-            });
+        let command = unsafe {
+            Command::new(backend_path.as_os_str())
+                .pre_exec(|| {
+                    Ok(())
+                })
+        };
 
         let mut process = command
             .stdout(log_file.try_clone().map_err(|e| format!("Failed to clone log file handle: {}", e))?)
