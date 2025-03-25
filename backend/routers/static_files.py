@@ -1,21 +1,12 @@
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse, HTMLResponse
-from pathlib import Path
 import os
 import mimetypes
 import logging
+from config import PATH_STATIC_DIR, PATH_DATA_DIR
+
 logger = logging.getLogger(__name__)
 router = APIRouter()
-
-# 配置静态文件目录路径
-STATIC_DIR = Path("data")
-
-# 配置静态文件目录路径
-WEB_DIR = Path("static")
-
-# 确保静态文件目录存在
-if not STATIC_DIR.exists():
-    STATIC_DIR.mkdir(parents=True)
 
 # 定义直接显示而不下载的文件扩展名
 DISPLAY_EXTENSIONS = {
@@ -32,14 +23,14 @@ async def serve_web():
 @router.get("/web/{file_path:path}")
 async def get_web_file(file_path: str):
     """获取前端资源文件"""
-    file_location = WEB_DIR / file_path
+    file_location = PATH_STATIC_DIR / file_path
 
     if not file_location.exists():
         raise HTTPException(status_code=404, detail="前端文件不存在")
 
     # 安全校验指向web子目录
     try:
-        file_location.relative_to(WEB_DIR)
+        file_location.relative_to(PATH_STATIC_DIR)
     except ValueError:
         raise HTTPException(status_code=403, detail="前端资源访问被拒绝")
 
@@ -48,7 +39,7 @@ async def get_web_file(file_path: str):
 @router.get("/static/{file_path:path}")
 async def get_static_file(file_path: str):
     """获取其他静态文件"""
-    file_location = STATIC_DIR / file_path
+    file_location = PATH_DATA_DIR / file_path
     
     if not file_location.exists():
         raise HTTPException(status_code=404, detail="文件不存在")
@@ -58,7 +49,7 @@ async def get_static_file(file_path: str):
         
     # 检查文件是否在static目录下（防止目录遍历攻击）
     try:
-        file_location.relative_to(STATIC_DIR)
+        file_location.relative_to(PATH_DATA_DIR)
     except ValueError:
         raise HTTPException(status_code=403, detail="访问被拒绝")
     

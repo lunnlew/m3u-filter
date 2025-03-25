@@ -7,6 +7,9 @@ export default defineConfig({
     title: 'M3U Filter'
   },
   output: {
+    distPath: {
+      root: 'dist/web'
+    },
     assetPrefix: '/web/'
   }
 });

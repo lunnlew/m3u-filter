@@ -1,0 +1,73 @@
+name: Desktop Client Build and Publish
+
+on:
+  push:
+    tags:
+      - '*'
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v2
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18'
+
+    - name: Install pnpm
+      uses: pnpm/action-setup@v2
+      with:
+        version: 8
+
+    - name: Setup Rust
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: stable
+        override: true
+
+    - name: Install dependencies
+      run: |
+        cd desktop
+        pnpm install
+
+    - name: Build desktop app
+      run: |
+        cd desktop
+        pnpm tauri build
+
+    - name: Extract tag name
+      id: get_tag
+      shell: bash
+      run: echo "TAG_NAME=${GITHUB_REF##*/}" >> $GITHUB_ENV
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v2
+      with:
+        name: desktop-${{ matrix.os }}
+        path: |
+          desktop/src-tauri/target/release/bundle/msi/*.msi
+          desktop/src-tauri/target/release/bundle/dmg/*.dmg
+          desktop/src-tauri/target/release/bundle/appimage/*.AppImage
+          desktop/src-tauri/target/release/bundle/deb/*.deb
+
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      if: startsWith(github.ref, 'refs/tags/')
+      with:
+        files: |
+          desktop/src-tauri/target/release/bundle/msi/*.msi
+          desktop/src-tauri/target/release/bundle/dmg/*.dmg
+          desktop/src-tauri/target/release/bundle/appimage/*.AppImage
+          desktop/src-tauri/target/release/bundle/deb/*.deb
+        name: Release ${{ env.TAG_NAME }}
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

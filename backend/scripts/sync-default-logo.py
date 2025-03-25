@@ -10,6 +10,7 @@ from pathlib import Path
 sys.path.append(str(Path(__file__).parent.parent))
 from sync import extract_table_data
 from utils import download_and_save_logo
+from config import DATABASE_FILE
 
 # 配置日志
 logging.basicConfig(
@@ -102,7 +103,7 @@ def main():
         conn = None
         cursor = None
         try:
-            conn = sqlite3.connect('data/epg.db', check_same_thread=False)
+            conn = sqlite3.connect(DATABASE_FILE, check_same_thread=False)
             cursor = conn.cursor()
             
             for channel_name, logo_path in logo_mapping.items():

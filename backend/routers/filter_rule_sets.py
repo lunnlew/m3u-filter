@@ -5,15 +5,13 @@ from models import FilterRuleSet, FilterRuleSetMapping, RuleTree
 import os
 from m3u_generator import M3UGenerator
 from models import BaseResponse
-from pathlib import Path
 from datetime import datetime
+from config import PATH_STATIC_DIR, PATH_DATA_DIR
 import json
 import logging
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-# 配置静态文件目录路径
-STATIC_DIR = Path("data")
 
 from pydantic import BaseModel
 
@@ -401,7 +399,7 @@ async def generate_m3u_file(
         )
         
         # 保存到m3u文件夹
-        m3u_dir = STATIC_DIR / 'm3u'
+        m3u_dir = PATH_DATA_DIR / 'm3u'
         # 确保静态文件目录存在
         if not m3u_dir.exists():
             m3u_dir.mkdir(parents=True)

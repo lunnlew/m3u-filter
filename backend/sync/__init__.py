@@ -15,10 +15,11 @@ import re
 import io
 import zipfile
 import gzip
+from config import DATABASE_FILE
 
 def get_proxy_config():
     """获取代理配置"""
-    conn = sqlite3.connect('data/epg.db', check_same_thread=False)
+    conn = sqlite3.connect(DATABASE_FILE, check_same_thread=False)
     c = conn.cursor()
     try:
         c.execute("SELECT * FROM proxy_config LIMIT 1")
@@ -51,7 +52,7 @@ def get_proxy_settings():
 async def sync_epg_source(source_id: int):
     """同步单个EPG数据源"""
     print(f"[同步EPG] 开始同步源ID: {source_id}")
-    conn = sqlite3.connect('data/epg.db', check_same_thread=False)
+    conn = sqlite3.connect(DATABASE_FILE, check_same_thread=False)
     c = conn.cursor()
     
     try:
@@ -201,7 +202,7 @@ async def sync_epg_source(source_id: int):
 
 async def sync_all_active_sources():
     """同步所有激活的EPG数据源"""
-    conn = sqlite3.connect('data/epg.db', check_same_thread=False)
+    conn = sqlite3.connect(DATABASE_FILE, check_same_thread=False)
     c = conn.cursor()
     
     try:

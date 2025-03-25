@@ -2,6 +2,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 from datetime import datetime
 from typing import Optional
+import asyncio
 from sync import sync_epg_source, sync_stream_source
 from database import get_db_connection
 from routers.stream_tracks import test_stream_track
@@ -10,7 +11,15 @@ from routers.filter_rule_sets import generate_m3u_file
 import logging
 logger = logging.getLogger(__name__)
 
-scheduler = AsyncIOScheduler()
+# 获取当前事件循环
+try:
+    loop = asyncio.get_running_loop()
+except RuntimeError:
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+
+# 创建调度器时指定事件循环
+scheduler = AsyncIOScheduler(event_loop=loop)
 
 async def test_all_stream_tracks():
     """测试所有直播源的连通性和速度"""
@@ -96,6 +105,7 @@ def init_scheduler():
 
 def start_scheduler():
     """启动调度器"""
+    
     init_scheduler()
     scheduler.start()
 

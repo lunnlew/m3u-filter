@@ -3,6 +3,7 @@ from queue import Queue
 from contextlib import contextmanager
 from typing import Optional
 from datetime import datetime
+from config import DATABASE_FILE
 
 import logging
 logger = logging.getLogger(__name__)
@@ -13,7 +14,7 @@ def init_db_pool():
     """初始化数据库连接池"""
     global db_pool
     for _ in range(5):
-        conn = sqlite3.connect('data/epg.db', check_same_thread=False)
+        conn = sqlite3.connect(DATABASE_FILE, check_same_thread=False)
         db_pool.put(conn)
 
 @contextmanager

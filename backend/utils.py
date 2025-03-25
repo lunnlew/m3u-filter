@@ -5,7 +5,7 @@ import aiofiles
 import uuid
 import re
 from urllib.parse import urlparse
-from config import LOGO_URL_WHITELIST, STATIC_DIR, LOGO_STATIC_DIR
+from config import LOGO_URL_WHITELIST, DATA_ROOT, STATIC_DIR, LOGO_STATIC_DIR, DATA_DIR
 from database import get_db_connection
 import logging
 logger = logging.getLogger(__name__)
@@ -38,7 +38,7 @@ async def download_and_save_logo(logo_url: str, channel_name: Optional[str] = No
         str: 保存后的相对路径
     """
     # 确保目录存在
-    logo_dir = os.path.join(STATIC_DIR, LOGO_STATIC_DIR)
+    logo_dir = os.path.join(DATA_ROOT, DATA_DIR, LOGO_STATIC_DIR)
     os.makedirs(logo_dir, exist_ok=True)
     
     # 获取文件扩展名

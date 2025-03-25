@@ -1,0 +1,25 @@
+[package]
+name = "m3u-filter-desktop"
+version = "1.0.0"
+edition = "2024"  # Update from 2015 to 2021/2024
+authors = ["LunnLew <lunnlew@gmail>"]
+description = "M3U Filter Desktop Application"
+
+# Add build-dependencies section
+[build-dependencies]
+tauri-build = { version = "2.0.0", features = [] }  # Add this line
+
+[lib]
+# The `_lib` suffix may seem redundant but it is necessary
+# to make the lib name unique and wouldn't conflict with the bin name.
+# This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
+name = "tauri_app_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[dependencies]
+tauri = { version = "2.0.0", features = [] }  # Add tauri dependency
+reqwest = { version = "0.12.0", features = ["blocking"] }  # Add reqwest dependency
+tauri-plugin-opener = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+

@@ -4,9 +4,15 @@ backend/*.log
 backend/.git
 backend/.vscode
 backend/data
+backend/build
 
 frontend/.git
 frontend/.pnpm-store
 frontend/node_modules
 frontend/.vscode
 frontend/dist
+
+desktop/node_modules
+desktop/src-tauri/target
+
+tauri-app

@@ -8,14 +8,12 @@ from datetime import datetime
 import xml.etree.ElementTree as ET
 import os
 from config import BASE_URL, STATIC_URL_PREFIX
+from config import PATH_STATIC_DIR, PATH_DATA_DIR
 import logging
 logger = logging.getLogger(__name__)
-from pathlib import Path
 
 router = APIRouter()
 
-# 配置静态文件目录路径
-STATIC_DIR = Path("data")
 
 @router.get("/epg-channels")
 async def get_channels():
@@ -213,7 +211,7 @@ async def export_epg_xml():
         # 生成XML文件
         xml_str = ET.tostring(tv, encoding="utf-8", xml_declaration=True)
         # 保存到m3u文件夹
-        m3u_dir = STATIC_DIR / 'm3u'
+        m3u_dir = PATH_DATA_DIR / 'm3u'
         # 确保静态文件目录存在
         if not m3u_dir.exists():
             m3u_dir.mkdir(parents=True)
