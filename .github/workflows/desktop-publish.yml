@@ -109,21 +109,19 @@ jobs:
       with:
         name: desktop-${{ matrix.os }}
         path: |
-          desktop/src-tauri/target/release/bundle/${{ 
-            matrix.os == 'windows-latest' && 'msi/*.msi' || 
-            matrix.os == 'macos-latest' && 'dmg/*.dmg' || 
-            matrix.os == 'ubuntu-latest' && 'deb/*.deb rpm/*.rpm' 
-          }}
+          ${{ matrix.os == 'windows-latest' && 'desktop/src-tauri/target/release/bundle/msi/*.msi' || '' }}
+          ${{ matrix.os == 'macos-latest' && 'desktop/src-tauri/target/release/bundle/dmg/*.dmg' || '' }}
+          ${{ matrix.os == 'ubuntu-latest' && 'desktop/src-tauri/target/release/bundle/deb/*.deb' || '' }}
+          ${{ matrix.os == 'ubuntu-latest' && 'desktop/src-tauri/target/release/bundle/rpm/*.rpm' || '' }}
 
     - name: Create Release
       uses: ncipollo/release-action@v1.14.0
       with:
         allowUpdates: true
         artifacts: |
-          desktop/src-tauri/target/release/bundle/${{ 
-            matrix.os == 'windows-latest' && 'msi/*.msi' || 
-            matrix.os == 'macos-latest' && 'dmg/*.dmg' || 
-            matrix.os == 'ubuntu-latest' && 'deb/*.deb rpm/*.rpm' 
-          }}
+          ${{ matrix.os == 'windows-latest' && 'desktop/src-tauri/target/release/bundle/msi/*.msi' || '' }}
+          ${{ matrix.os == 'macos-latest' && 'desktop/src-tauri/target/release/bundle/dmg/*.dmg' || '' }}
+          ${{ matrix.os == 'ubuntu-latest' && 'desktop/src-tauri/target/release/bundle/deb/*.deb' || '' }}
+          ${{ matrix.os == 'ubuntu-latest' && 'desktop/src-tauri/target/release/bundle/rpm/*.rpm' || '' }}
         artifactErrorsFailBuild: true
         token: ${{ secrets.GITHUB_TOKEN }}
