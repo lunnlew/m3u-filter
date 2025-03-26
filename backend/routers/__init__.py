@@ -21,10 +21,10 @@ api_router.include_router(epg_programs_router, prefix="/api", tags=["epg-program
 api_router.include_router(epg_sources_router, prefix="/api", tags=["epg-sources"])
 api_router.include_router(proxy_config_router, prefix="/api", tags=["proxy-config"])
 api_router.include_router(default_channel_logos_router, prefix="/api", tags=["channel-logos"])
-api_router.include_router(static_files_router, tags=["static-files"])
 api_router.include_router(site_config_router, prefix="/api", tags=["site-config"])
 api_router.include_router(stream_sources_router, prefix="/api", tags=["stream-sources"])
 api_router.include_router(stream_tracks_router, prefix="/api", tags=["stream-tracks"])
 api_router.include_router(filter_rules_router, prefix="/api", tags=["filter-rules"])
 api_router.include_router(filter_rule_sets_router, prefix="/api", tags=["filter-rule-sets"])
 api_router.include_router(health_router, prefix="/api", tags=["health"])
+api_router.include_router(static_files_router, tags=["static-files"])  # 移到最后
