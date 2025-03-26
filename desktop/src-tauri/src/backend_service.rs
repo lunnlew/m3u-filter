@@ -95,7 +95,39 @@ pub fn start_backend_service() -> Result<(), String> {
 pub fn stop_backend_service() {
     if let Ok(mut guard) = BACKEND_PROCESS.lock() {
         if let Some(mut process) = guard.take() {
+            // 先尝试正常终止进程
             let _ = process.kill();
+            
+            // 等待进程完全退出，设置超时时间
+            let timeout = Duration::from_secs(5);
+            let start = std::time::Instant::now();
+            
+            while start.elapsed() < timeout {
+                match process.try_wait() {
+                    Ok(Some(_)) => return, // 进程已退出
+                    Ok(None) => thread::sleep(Duration::from_millis(100)), // 继续等待
+                    Err(_) => break, // 出错时退出循环
+                }
+            }
+            
+            // 如果超时，强制终止进程
+            #[cfg(target_os = "windows")]
+            {
+                use std::os::windows::process::CommandExt;
+                let _ = Command::new("taskkill")
+                    .args(&["/F", "/PID"])
+                    .arg(process.id().to_string())
+                    .creation_flags(0x08000000)
+                    .output();
+            }
+            
+            #[cfg(not(target_os = "windows"))]
+            {
+                use std::os::unix::prelude::*;
+                let _ = Command::new("kill")
+                    .args(&["-9", &process.id().to_string()])
+                    .output();
+            }
         }
     }
 }

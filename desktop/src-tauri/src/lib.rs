@@ -8,6 +8,12 @@ fn greet(name: &str) -> String {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // 注册全局清理处理程序
+    ctrlc::set_handler(move || {
+        backend_service::stop_backend_service();
+        std::process::exit(0);
+    }).expect("Error setting Ctrl-C handler");
+
     // 启动后端服务
     if let Err(e) = backend_service::start_backend_service() {
         eprintln!("Failed to start backend service: {}", e);
