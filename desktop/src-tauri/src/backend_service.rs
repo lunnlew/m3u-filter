@@ -53,6 +53,8 @@ pub fn start_backend_service() -> Result<(), String> {
 
         #[cfg(any(target_os = "linux", target_os = "macos"))]
         let mut command = Command::new(backend_path.as_os_str());
+
+        #[cfg(any(target_os = "linux", target_os = "macos"))]
         let command = unsafe {
             command.pre_exec(|| {
                 Ok(())
