@@ -1,6 +1,11 @@
 mod backend_service;
-use tauri::Manager;
-use tauri::{SystemTray, SystemTrayMenu, SystemTrayMenuItem};
+use tauri::{
+    Manager, 
+    SystemTray, 
+    SystemTrayMenu, 
+    SystemTrayEvent,
+    SystemTrayMenuItem
+};
 
 #[tauri::command]
 fn greet(name: &str) -> String {
