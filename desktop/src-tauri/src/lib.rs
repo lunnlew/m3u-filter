@@ -8,11 +8,20 @@ fn greet(name: &str) -> String {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // 解析命令行参数
+    let args: Vec<String> = std::env::args().collect();
+    let service_mode = args.iter().any(|arg| arg == "--service");
+    
+    // 设置服务模式
+    backend_service::set_service_mode(service_mode);
+
     // 注册全局清理处理程序
-    ctrlc::set_handler(move || {
-        backend_service::stop_backend_service();
-        std::process::exit(0);
-    }).expect("Error setting Ctrl-C handler");
+    if !service_mode {
+        ctrlc::set_handler(move || {
+            backend_service::stop_backend_service();
+            std::process::exit(0);
+        }).expect("Error setting Ctrl-C handler");
+    }
 
     // 启动后端服务
     if let Err(e) = backend_service::start_backend_service() {
@@ -22,13 +31,15 @@ pub fn run() {
 
     tauri::Builder::default()
         .setup(|app| {
-            let _window = app.get_webview_window("main").unwrap(); // Add underscore
+            let _window = app.get_webview_window("main").unwrap();
             Ok(())
         })
-        .on_window_event(|_window, event| {  // Add underscore
+        .on_window_event(|_window, event| {
             if let tauri::WindowEvent::Destroyed = event {
-                // 当窗口关闭时停止后端服务
-                backend_service::stop_backend_service();
+                // 当窗口关闭时，仅在非服务模式下停止后端服务
+                if !service_mode {
+                    backend_service::stop_backend_service();
+                }
             }
         })
         .plugin(tauri_plugin_opener::init())

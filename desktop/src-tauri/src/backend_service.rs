@@ -13,6 +13,13 @@ use std::os::unix::process::CommandExt;
 static BACKEND_PROCESS: Mutex<Option<Child>> = Mutex::new(None);
 const MAX_RETRIES: u32 = 3;
 const HEALTH_CHECK_URL: &str = "http://localhost:3232/api/health";
+static SERVICE_MODE: Mutex<bool> = Mutex::new(false);  // 添加服务模式标志
+
+pub fn set_service_mode(enabled: bool) {
+    if let Ok(mut mode) = SERVICE_MODE.lock() {
+        *mode = enabled;
+    }
+}
 
 fn check_service_health() -> bool {
     let client = Client::new();
@@ -93,6 +100,13 @@ pub fn start_backend_service() -> Result<(), String> {
 }
 
 pub fn stop_backend_service() {
+    // 如果是服务模式，不终止后台进程
+    if let Ok(mode) = SERVICE_MODE.lock() {
+        if *mode {
+            return;
+        }
+    }
+
     if let Ok(mut guard) = BACKEND_PROCESS.lock() {
         if let Some(mut process) = guard.take() {
             // 先尝试正常终止进程
