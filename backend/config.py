@@ -35,5 +35,5 @@ if not PATH_LOGO_LOGS_DIR.exists():
     PATH_LOGO_LOGS_DIR.mkdir(parents=True)
 
 # 站点基础URL配置
-BASE_URL = "http://localhost:8000"  # 开发环境默认值
+BASE_URL = "http://localhost:3232"  # 开发环境默认值
 STATIC_URL_PREFIX = "/static"  # 静态文件URL前缀

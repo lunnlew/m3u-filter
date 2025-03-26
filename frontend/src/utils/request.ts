@@ -8,7 +8,7 @@ export interface ApiResponse<T = any> {
 }
 
 const request = axios.create({
-  baseURL: 'http://localhost:8000/api',
+  baseURL: 'http://localhost:3232/api',
   timeout: 30000,
 });
 

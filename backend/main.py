@@ -11,7 +11,7 @@ if __name__ == "__main__":
         uvicorn.run(
             "app:create_app",  # 修改为当前模块
             host="0.0.0.0",
-            port=8000,
+            port=3232,
             loop="asyncio",
             reload=False,
             workers=1,

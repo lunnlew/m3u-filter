@@ -12,7 +12,7 @@ use std::os::unix::process::CommandExt;
 
 static BACKEND_PROCESS: Mutex<Option<Child>> = Mutex::new(None);
 const MAX_RETRIES: u32 = 3;
-const HEALTH_CHECK_URL: &str = "http://localhost:8000/api/health";
+const HEALTH_CHECK_URL: &str = "http://localhost:3232/api/health";
 
 fn check_service_health() -> bool {
     let client = Client::new();
