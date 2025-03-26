@@ -18,7 +18,6 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 
 [dependencies]
 ctrlc = "3.4"
-tauri-plugin-tray = "0.1.0"  # Add this if missing
 tauri = { version = "2.0.0", features =  [ "tray-icon", "image-png", "system-tray" ] }  # Add tauri dependency
 reqwest = { version = "0.12.0", features = ["blocking"] }  # Add reqwest dependency
 tauri-plugin-opener = "2"
