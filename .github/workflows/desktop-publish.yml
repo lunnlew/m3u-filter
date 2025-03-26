@@ -85,23 +85,6 @@ jobs:
     - name: Install PyInstaller
       run: pip install pyinstaller
 
-    - name: Build frontend
-      run: |
-        cd frontend
-        pnpm build
-    
-    - name: Copy Frontend to Backend
-      run: |
-        cd backend
-        cp -r ../frontend/dist/* ./static
-
-    # 新增PyInstaller打包步骤
-    - name: Build Backend with PyInstaller
-      run: |
-        cd backend
-        pyinstaller --noconfirm --clean pyinstaller.spec
-      shell: bash
-
     - name: Build desktop app
       run: |
         cd desktop

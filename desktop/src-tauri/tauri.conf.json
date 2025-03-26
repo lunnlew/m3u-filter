@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "identifier": "com.m3u.filter",
   "build": {
-    "beforeBuildCommand": "cd ../backend && pyinstaller pyinstaller.spec && cd ../frontend && pnpm run build",
+    "beforeBuildCommand": "cd ../backend && pyinstaller --noconfirm --clean pyinstaller.spec && cd ../frontend && pnpm run build",
     "beforeDevCommand": "cd ../frontend && pnpm run dev",
     "devUrl": "http://localhost:3000",
     "frontendDist": "../../frontend/dist"
