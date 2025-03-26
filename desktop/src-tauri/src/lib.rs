@@ -1,5 +1,6 @@
 mod backend_service;
 use tauri::Manager;
+use tauri::{SystemTray, SystemTrayMenu, SystemTrayMenuItem};
 
 #[tauri::command]
 fn greet(name: &str) -> String {
@@ -30,13 +31,37 @@ pub fn run() {
     }
 
     tauri::Builder::default()
+        .system_tray(
+            SystemTray::new().with_menu(
+                SystemTrayMenu::new()
+                    .add_item("显示", "显示窗口")
+                    .add_native_item(SystemTrayMenuItem::Separator)
+                    .add_item("退出", "退出程序")
+            )
+        )
+        .on_system_tray_event(|app, event| {
+            let window = app.get_webview_window("main").unwrap();
+            match event {
+                tauri::SystemTrayEvent::MenuItemClick { id, .. } => match id.as_str() {
+                    "显示" => {
+                        window.show().unwrap();
+                        window.set_focus().unwrap();
+                    }
+                    "退出" => {
+                        backend_service::stop_backend_service();
+                        std::process::exit(0);
+                    }
+                    _ => {}
+                },
+                _ => {}
+            }
+        })
         .setup(|app| {
             let _window = app.get_webview_window("main").unwrap();
             Ok(())
         })
-        .on_window_event(|_window, event| {
+        .on_window_event(move |_window, event| {  // Added move keyword here
             if let tauri::WindowEvent::Destroyed = event {
-                // 当窗口关闭时，仅在非服务模式下停止后端服务
                 if !service_mode {
                     backend_service::stop_backend_service();
                 }
