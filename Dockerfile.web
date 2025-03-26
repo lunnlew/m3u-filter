@@ -15,7 +15,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # 复制前后端构建结果
 COPY backend .
-COPY --from=frontend-builder /app/dist/web ./static
+COPY --from=frontend-builder /app/dist ./static
 
 # 设置环境变量
 ENV PYTHONUNBUFFERED=1

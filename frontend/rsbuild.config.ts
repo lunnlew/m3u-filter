@@ -8,8 +8,8 @@ export default defineConfig({
   },
   output: {
     distPath: {
-      root: 'dist/web'
+      root: 'dist'
     },
-    assetPrefix: '/web/'
+    assetPrefix: '/'
   }
 });

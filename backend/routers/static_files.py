@@ -20,7 +20,7 @@ DISPLAY_EXTENSIONS = {
 async def serve_web():
     return await get_web_file("index.html")
 
-@router.get("/web/{file_path:path}")
+@router.get("{file_path:path}")
 async def get_web_file(file_path: str):
     """获取前端资源文件"""
     file_location = PATH_STATIC_DIR / file_path
