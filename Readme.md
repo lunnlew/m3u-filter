@@ -34,3 +34,8 @@ docker pull lunnlew/m3u-filter
 ```bash
 docker run -d --name m3u-filter -p 3232:3232 -v /path/to/your/data:/app/data lunnlew/m3u-filter
 ```
+
+## 服务模式
+```bash
+m3u-filter-desktop.exe --service
+```
