@@ -108,6 +108,7 @@ jobs:
         name: desktop-${{ matrix.os }}
         path: |
           ${{ matrix.os == 'windows-latest' && 'desktop/src-tauri/target/release/bundle/msi/*.msi' || '' }}
+          ${{ matrix.os == 'windows-latest' && 'desktop/src-tauri/target/release/bundle/nsis/*.exe' || '' }}
           ${{ matrix.os == 'macos-latest' && 'desktop/src-tauri/target/release/bundle/dmg/*.dmg' || '' }}
           ${{ matrix.os == 'ubuntu-latest' && 'desktop/src-tauri/target/release/bundle/deb/*.deb' || '' }}
           ${{ matrix.os == 'ubuntu-latest' && 'desktop/src-tauri/target/release/bundle/rpm/*.rpm' || '' }}
@@ -118,6 +119,7 @@ jobs:
         allowUpdates: true
         artifacts: |
           ${{ matrix.os == 'windows-latest' && 'desktop/src-tauri/target/release/bundle/msi/*.msi' || '' }}
+          ${{ matrix.os == 'windows-latest' && 'desktop/src-tauri/target/release/bundle/nsis/*.exe' || '' }}
           ${{ matrix.os == 'macos-latest' && 'desktop/src-tauri/target/release/bundle/dmg/*.dmg' || '' }}
           ${{ matrix.os == 'ubuntu-latest' && 'desktop/src-tauri/target/release/bundle/deb/*.deb' || '' }}
           ${{ matrix.os == 'ubuntu-latest' && 'desktop/src-tauri/target/release/bundle/rpm/*.rpm' || '' }}
