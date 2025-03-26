@@ -20,22 +20,6 @@ DISPLAY_EXTENSIONS = {
 async def serve_web():
     return await get_web_file("index.html")
 
-@router.get("{file_path:path}")
-async def get_web_file(file_path: str):
-    """获取前端资源文件"""
-    file_location = PATH_STATIC_DIR / file_path
-
-    if not file_location.exists():
-        raise HTTPException(status_code=404, detail="前端文件不存在")
-
-    # 安全校验指向web子目录
-    try:
-        file_location.relative_to(PATH_STATIC_DIR)
-    except ValueError:
-        raise HTTPException(status_code=403, detail="前端资源访问被拒绝")
-
-    return FileResponse(file_location)
-
 @router.get("/static/{file_path:path}")
 async def get_static_file(file_path: str):
     """获取其他静态文件"""
@@ -73,3 +57,19 @@ async def get_static_file(file_path: str):
         kwargs['filename'] = file_location.name
     
     return FileResponse(file_location, **kwargs)
+
+@router.get("{file_path:path}")
+async def get_web_file(file_path: str):
+    """获取前端资源文件"""
+    file_location = PATH_STATIC_DIR / file_path
+
+    if not file_location.exists():
+        raise HTTPException(status_code=404, detail="前端文件不存在")
+
+    # 安全校验指向web子目录
+    try:
+        file_location.relative_to(PATH_STATIC_DIR)
+    except ValueError:
+        raise HTTPException(status_code=403, detail="前端资源访问被拒绝")
+
+    return FileResponse(file_location)
