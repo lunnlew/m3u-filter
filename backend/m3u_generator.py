@@ -52,6 +52,71 @@ class M3UGenerator:
         
         return grouped_channels
 
+    def generate_txt(self, channels: List[Dict], rule_names: List[str] = [], sort_by: str = 'display_name', group_order: List[str] = []) -> tuple[str, str]:
+        """生成TXT格式的播放列表
+        
+        Args:
+            channels: 频道列表
+            rule_names: 规则名称列表
+            sort_by: 排序字段
+            group_order: 分组顺序列表
+        """
+        # 去重处理
+        filtered_channels = self._deduplicate_channels(channels)
+        
+        # 排序和分组处理
+        filtered_channels = self._sort_and_group_channels(filtered_channels, sort_by, group_order)
+        
+        # 按分组组织频道
+        grouped_channels = {}
+        unknown_channels = []
+        
+        # 收集分组频道
+        for channel in filtered_channels:
+            group = channel.get('group_title')
+            if not group or group == 'Unknown':
+                unknown_channels.append(channel)
+                continue
+            
+            if group not in grouped_channels:
+                grouped_channels[group] = []
+            grouped_channels[group].append(channel)
+        
+        # 生成TXT格式内容
+        txt_lines = []
+        
+        # 按照group_order的顺序输出分组
+        for group in group_order:
+            if group in grouped_channels:
+                txt_lines.append(f"{group},#genre#")
+                for channel in grouped_channels[group]:
+                    txt_lines.append(f"{channel['display_name']},{channel['stream_url']}")
+                grouped_channels.pop(group)
+        
+        # 输出剩余的分组（按字母顺序）
+        for group in sorted(grouped_channels.keys()):
+            txt_lines.append(f"{group},#genre#")
+            for channel in grouped_channels[group]:
+                txt_lines.append(f"{channel['display_name']},{channel['stream_url']}")
+        
+        # 最后输出未分组的频道
+        if unknown_channels:
+            txt_lines.append("其他频道,#genre#")
+            for channel in unknown_channels:
+                txt_lines.append(f"{channel['display_name']},{channel['stream_url']}")
+        
+        txt_content = "\n".join(txt_lines)
+
+        # 生成文件名
+        if rule_names:
+            filename = '_'.join(rule_names) + '.txt'
+            # 确保文件名合法
+            filename = ''.join(c for c in filename if c.isalnum() or c in ('_', '-', '.'))
+        else:
+            filename = 'filtered.txt'
+        
+        return txt_content, filename
+
     def generate_m3u(self, channels: List[Dict], rule_names: List[str] = [], header_info: dict = {}, 
                     sort_by: str = 'display_name', group_order: List[str] = []) -> tuple[str, str]:
         """生成M3U格式的播放列表

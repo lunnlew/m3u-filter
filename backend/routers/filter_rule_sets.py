@@ -410,3 +410,104 @@ async def generate_m3u_file(
             f.write(m3u_content)
         
         return BaseResponse.success({"url_path": f"/m3u/{filename}"})
+
+@router.post("/filter-rule-sets/{set_id}/generate-txt")
+async def generate_txt_file(
+    set_id: int,
+    sort_by: str = 'display_name',
+    group_order: List[str] = []
+):
+    """根据规则集合生成TXT风格文件"""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        # 获取规则集合
+        cursor.execute("SELECT id, name, enabled, logic_type FROM filter_rule_sets WHERE id = ?", (set_id,))
+        rule_set = cursor.fetchone()
+        if not rule_set:
+            return BaseResponse.error(message="规则集合不存在", code=404)
+        
+        if not rule_set[2]:  # enabled
+            raise HTTPException(status_code=400, detail="Rule set is disabled")
+        
+        # 获取所有频道
+        # 修改获取频道的SQL查询，添加download_speed字段
+        cursor.execute("""
+            SELECT
+                stream_tracks.id,
+                stream_tracks.name as display_name,
+                stream_tracks.url as stream_url,
+                stream_tracks.group_title,
+                stream_tracks.catchup,
+                stream_tracks.catchup_source,
+                stream_tracks.download_speed,
+                epg_channels.channel_id,
+                epg_channels.language,
+                epg_channels.category,
+                COALESCE(
+                    epg_channels.local_logo_path,
+                    epg_channels.logo_url,
+                    (SELECT local_logo_path FROM default_channel_logos 
+                    WHERE channel_name = stream_tracks.name 
+                    ORDER BY priority DESC LIMIT 1),
+                    (SELECT logo_url FROM default_channel_logos 
+                    WHERE channel_name = stream_tracks.name 
+                    ORDER BY priority DESC LIMIT 1)
+                ) as logo_url,
+                epg_sources.name AS source_name,
+                epg_sources.id AS source_id
+            FROM stream_tracks
+            LEFT JOIN epg_channels ON stream_tracks.name = epg_channels.display_name
+            LEFT JOIN epg_sources ON epg_channels.source_id = epg_sources.id
+            WHERE stream_tracks.test_status = 1
+        """)
+        columns = [description[0] for description in cursor.description]
+        channels = [dict(zip(columns, row)) for row in cursor.fetchall()]
+
+        # 获取规则树
+        rule_tree = RuleTree()
+        rule_tree.build_from_rule_set(set_id, conn)
+
+
+        # 使用规则树过滤频道
+        filtered_channels = rule_tree.filter_channels(channels)
+
+        # 按分组和频道名称对频道进行分组
+        grouped_channels = {}
+        for channel in filtered_channels:
+            group = channel.get('group_title', 'Unknown')
+            name = channel.get('display_name', '')
+            key = (group, name)  # 使用分组和名称的元组作为键
+            if key not in grouped_channels:
+                grouped_channels[key] = []
+            grouped_channels[key].append(channel)
+
+        # 对每个分组下的同名频道按download_speed排序并只保留前2个
+        final_channels = []
+        for (group, name), channels in grouped_channels.items():
+            sorted_channels = sorted(
+                channels, 
+                key=lambda x: float(x.get('download_speed', 0) or 0), 
+                reverse=True
+            )
+            final_channels.extend(sorted_channels[:2])
+
+
+        # 使用规则集合名称作为文件名
+        filename = f"{rule_set[1]}"
+        filename = ''.join(c for c in filename if c.isalnum() or c in ('_', '-', '.'))
+
+        # 使用M3UGenerator生成TXT文件
+        generator = M3UGenerator()
+        txt_content, filename = generator.generate_txt(final_channels, [filename], sort_by, group_order)
+        
+        # 保存到m3u文件夹
+        m3u_dir = PATH_DATA_DIR / 'm3u'
+        if not m3u_dir.exists():
+            m3u_dir.mkdir(parents=True)
+
+        file_path = m3u_dir / filename
+        
+        with open(file_path, 'w', encoding='utf-8') as f:
+            f.write(txt_content)
+        
+        return BaseResponse.success({"url_path": f"/m3u/{filename}"})

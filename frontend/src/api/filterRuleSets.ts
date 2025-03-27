@@ -89,3 +89,11 @@ export const useGenerateM3U = () => {
     }
   });
 };
+
+export const useGenerateTXT = () => {
+  return useMutation<ApiResponse<GenerateM3UResponse>, unknown, number>({
+    mutationFn: async (id: number) => {
+      return await request.post(`/filter-rule-sets/${id}/generate-txt`);
+    }
+  });
+};

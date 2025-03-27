@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Table, Button, Modal, Form, Input, Switch, message, Space, Select } from 'antd';
-import { useFilterRuleSets, useFilterRuleSetMutation, useFilterRuleSetDelete, useAddRuleToSet, useRemoveRuleFromSet, useGenerateM3U } from '../api/filterRuleSets';
+import { useFilterRuleSets, useFilterRuleSetMutation, useFilterRuleSetDelete, useAddRuleToSet, useRemoveRuleFromSet, useGenerateM3U, useGenerateTXT  // 新增TXT生成钩子
+} from '../api/filterRuleSets';
 import { useFilterRules } from '../api/filterRules';
 import { FilterRuleSet, FilterRule } from '../types/filter';
 import { useSiteConfig } from '../api/siteConfig';
@@ -23,6 +24,7 @@ export const FilterRuleSetList = () => {
     const addRuleMutation = useAddRuleToSet();
     const removeRuleMutation = useRemoveRuleFromSet();
     const { mutateAsync: generateM3U } = useGenerateM3U();
+    const { mutateAsync: generateTXT } = useGenerateTXT();  // 新增TXT生成mutation
 
     const handleEdit = (record: FilterRuleSet) => {
         setEditingId(record.id);
@@ -91,6 +93,25 @@ export const FilterRuleSetList = () => {
         }
     };
 
+    // 生成M3U文件
+    const handleGenerateTXT = async (id: number) => {
+        try {
+            const { data: result } = await generateTXT(id);
+            const fullUrl = `${siteConfig.base_url}${siteConfig.static_url_prefix}${result.url_path}`;
+            Modal.success({
+                title: 'M3U文件生成成功',
+                content: (
+                    <div style={{ margin: '16px 0' }}>
+                        <p style={{ marginBottom: '8px' }}>访问地址：</p>
+                        <p style={{ wordBreak: 'break-all', background: '#f5f5f5', padding: '8px', borderRadius: '4px' }}>{fullUrl}</p>
+                    </div>
+                )
+            });
+        } catch (error) {
+            message.error('生成M3U文件失败');
+        }
+    };
+
     const handleRemoveRule = (ruleSetId: number, ruleId: number, isSet: boolean = false) => {
         removeRuleMutation.mutate({ setId: ruleSetId, ruleId, isRuleSet: isSet }, {
             onSuccess: () => {
@@ -143,7 +164,9 @@ export const FilterRuleSetList = () => {
                     >
                         管理规则
                     </Button>
+                    {/* 新增TXT生成按钮 */}
                     <Button type="link" onClick={() => handleGenerateM3U(record.id)}>生成M3U</Button>
+                    <Button type="link" onClick={() => handleGenerateTXT(record.id)}>生成TXT</Button>
                     <Button type="link" danger onClick={() => handleDelete(record.id)}>删除</Button>
                 </Space>
             )
