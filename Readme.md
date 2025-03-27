@@ -15,7 +15,7 @@ m3u-filter 是一个用于过滤 m3u 文件的工具，它可以根据用户提�
 cd backend
 pip install -r requirements.txt
 
-uvicorn app:create_app --reload --factory
+uvicorn app:create_app --reload --factory --port 3232 --host 0.0.0.0
 # 或者
 python main.py
 ```

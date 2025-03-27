@@ -557,10 +557,13 @@ async def test_download_speed(url: str, track_id: int, bitrate: int) -> dict:
         stderr_text = ''
         current_speed = 0.0
         downloaded = 0
+        start_time = time.time()  # 记录测试开始时间
 
         async def read_output():
             nonlocal stderr_text, current_speed, downloaded
-            start_time = time.time()
+            last_update = time.time()
+            total_bytes = 0  # 新增总字节数统计
+            
             while True:
                 try:
                     line = await asyncio.get_event_loop().run_in_executor(
@@ -575,27 +578,41 @@ async def test_download_speed(url: str, track_id: int, bitrate: int) -> dict:
                     
                     # 解析实时速度信息
                     if line.startswith('frame='):
-                        # 解析时间和速度
-                        time_match = re.search(r'time=(\d+):(\d+):(\d+.\d+)', line)
-                        speed_match = re.search(r'speed=(\d+.\d+)x', line)
+                        # 改进正则表达式，允许N/A值
+                        size_match = re.search(r'size=\s*([\d.]+|N/A)\s*kB', line)
+                        time_match = re.search(r'time=(\d+):(\d+):(\d+\.\d+)', line)
+                        speed_match = re.search(r'speed=\s*([\d.]+)x', line)
                         
-                        if time_match and speed_match:
-                            # 计算已处理的时间（秒）
-                            h, m, s = time_match.groups()
-                            processed_time = float(h) * 3600 + float(m) * 60 + float(s)
-                            
-                            # 获取速度倍率
-                            speed_factor = float(speed_match.group(1))
-                            
-                            # 修改：使用传入的码率计算实际下载速度，单位改为 Mbps
-                            current_speed = bitrate * speed_factor / (1024 * 1024)  # 转换为 Mbps
-                            
-                            # 计算已下载数据量
-                            downloaded = bitrate * processed_time
+                        # 优先使用实际下载字节数
+                        if size_match and size_match.group(1) != 'N/A':
+                            downloaded = int(float(size_match.group(1)) * 1024)  # kB转bytes
+                        else:
+                            # 备用方案：通过码率和速度倍率估算
+                            if speed_match and bitrate > 0:
+                                speed_factor = float(speed_match.group(1))
+                                downloaded = int((bitrate * speed_factor) * (time.time() - start_time) / 8)
+                        
+                        # 计算持续时间（即使没有size信息）
+                        if time_match:
+                            h, m, s = map(float, time_match.groups())
+                            duration = h * 3600 + m * 60 + s
+                        else:
                             duration = time.time() - start_time
-                            if duration > 0:
-                                current_speed = (downloaded / duration) / (1024 * 1024 / 8)  # 转换为 Mbps
-                                
+                        
+                        # 最终速度计算逻辑
+                        if duration > 0:
+                            if downloaded > 0:  # 优先使用实际下载数据
+                                current_speed = (downloaded * 8) / (duration * 1e6)  # bytes转Mbps
+                            elif bitrate > 0 and speed_match:  # 备用方案
+                                current_speed = bitrate / 1e6 * float(speed_match.group(1))
+                        
+                        # 最低速度限制和日志记录
+                        current_speed = max(current_speed, 0.1) if current_speed > 0 else 0.1
+                        
+                        # 调试日志包含数据来源信息
+                        logger.debug(f"速度计算方式: {'实际数据' if size_match else '估算'} | "
+                                    f"速度: {current_speed:.2f}Mbps 持续时间: {duration:.2f}s")
+
                 except Exception as e:
                     logger.error(f"读取输出错误: {str(e)}")
                     break

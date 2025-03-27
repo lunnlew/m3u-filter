@@ -77,7 +77,7 @@ class M3UGenerator:
                 channel['group_title'] = '未分类'
 
         # 初始化M3U文件内容
-        lines = [f'#EXTM3U x-tvg-url="{STATIC_URL_PREFIX}/m3u/epg.xml"']
+        lines = [f'#EXTM3U x-tvg-url="{BASE_URL}{STATIC_URL_PREFIX}/m3u/epg.xml"']
 
         # 添加header_info中的信息
         if 'generated_at' in header_info:
@@ -99,7 +99,7 @@ class M3UGenerator:
                 extinf += f' tvg-url="{channel["x_tvg_url"]}"'
             
             if 'logo_url' in channel and channel["logo_url"]:
-                extinf += f' tvg-logo="{STATIC_URL_PREFIX}{channel["logo_url"]}"'
+                extinf += f' tvg-logo="{BASE_URL}{STATIC_URL_PREFIX}{channel["logo_url"]}"'
 
             if 'display_name' in channel and channel["display_name"]:
                 extinf += f' tvg-name="{channel["display_name"]}"'
