@@ -12,6 +12,7 @@ import { StreamSourceList } from './components/StreamSourceList';
 import StreamTrackList from './components/StreamTrackList';
 import FilterRuleList from './components/FilterRuleList';
 import { FilterRuleSetList } from './components/FilterRuleSetList';
+import SortTemplateList from './components/SortTemplateList';
 
 const queryClient = new QueryClient();
 
@@ -35,6 +36,7 @@ const App = () => {
               { key: 'tracks', label: '直播源管理' },
               { key: 'filters', label: '过滤规则管理' },
               { key: 'filter-sets', label: '筛选合集管理' },
+              { key: 'sort-templates', label: '排序模板管理' },
               { key: 'settings', label: '代理设置' },
             ]}
             style={{ marginBottom: '20px' }}
@@ -47,7 +49,8 @@ const App = () => {
                     activeTab === 'tracks' ? <StreamTrackList /> :
                       activeTab === 'filters' ? <FilterRuleList /> :
                         activeTab === 'filter-sets' ? <FilterRuleSetList /> :
-                          <ProxyConfigForm />}
+                          activeTab === 'sort-templates' ? <SortTemplateList /> :
+                            <ProxyConfigForm />}
         </div>
       </QueryClientProvider>
     </ConfigProvider>

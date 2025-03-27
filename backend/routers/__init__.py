@@ -12,7 +12,8 @@ from .stream_sources import router as stream_sources_router
 from .stream_tracks import router as stream_tracks_router
 from .filter_rules import router as filter_rules_router
 from .filter_rule_sets import router as filter_rule_sets_router
-from routers.health import router as health_router
+from .health import router as health_router
+from .sort_templates import router as sort_templates_router
 
 api_router = APIRouter()
 
@@ -27,4 +28,5 @@ api_router.include_router(stream_tracks_router, prefix="/api", tags=["stream-tra
 api_router.include_router(filter_rules_router, prefix="/api", tags=["filter-rules"])
 api_router.include_router(filter_rule_sets_router, prefix="/api", tags=["filter-rule-sets"])
 api_router.include_router(health_router, prefix="/api", tags=["health"])
+api_router.include_router(sort_templates_router, prefix="/api", tags=["sort-templates"])
 api_router.include_router(static_files_router, tags=["static-files"])  # 移到最后

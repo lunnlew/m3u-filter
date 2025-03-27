@@ -24,35 +24,70 @@ class M3UGenerator:
 
         return list(url_map.values())
 
-    def _sort_and_group_channels(self, channels: List[Dict], sort_by: str = 'display_name', group_order: List[str] = []) -> List[Dict]:
+    def _sort_and_group_channels(self, channels: List[Dict], sort_by: str = 'display_name', group_order: List[str] = [], sort_templates: Dict[str, List[str]] = {}) -> List[Dict]:
         """对频道进行排序和分组处理
         
         Args:
             channels: 频道列表
             sort_by: 排序字段，默认按display_name排序
             group_order: 分组顺序列表，如果提供则按照指定顺序排列分组
+            sort_templates: 排序模板，格式：{"分组名": ["频道1", "频道2", ...]}
         """
         # 首先按照频道名称排序
         sorted_channels = sorted(channels, key=lambda x: x.get(sort_by, '').lower())
         
-        if not group_order or len(group_order) == 0:
-            # 如果没有指定分组顺序，直接返回排序后的结果
+        if not group_order and not sort_templates:
+            # 如果没有指定分组顺序和排序模板，直接返回排序后的结果
             return sorted_channels
         
         # 按照指定的分组顺序重新组织频道
         grouped_channels = []
-        # 首先处理指定顺序的分组
-        for group in group_order:
-            group_channels = [ch for ch in sorted_channels if ch.get('group_title') == group]
-            grouped_channels.extend(group_channels)
         
-        # 处理未在指定顺序中的分组
-        remaining_channels = [ch for ch in sorted_channels if ch.get('group_title') not in group_order]
+        # 首先处理指定顺序的分组
+        processed_groups = set()
+        
+        # 处理排序模板中的分组
+        for group, channel_order in sort_templates.items():
+            group_channels = [ch for ch in sorted_channels if ch.get('group_title') == group]
+            if not group_channels:
+                continue
+                
+            # 创建一个映射，用于快速查找频道在排序列表中的位置
+            order_map = {name: idx for idx, name in enumerate(channel_order)}
+            
+            # 对分组内的频道按照模板中的顺序排序
+            sorted_group_channels = []
+            unordered_channels = []
+            
+            for channel in group_channels:
+                name = channel.get('display_name')
+                if name in order_map:
+                    sorted_group_channels.append((order_map[name], channel))
+                else:
+                    unordered_channels.append(channel)
+            
+            # 合并排序结果
+            final_group_channels = [ch for _, ch in sorted(sorted_group_channels, key=lambda x: x[0])]
+            final_group_channels.extend(sorted(unordered_channels, key=lambda x: x.get('display_name', '').lower()))
+            
+            grouped_channels.extend(final_group_channels)
+            processed_groups.add(group)
+        
+        # 处理group_order中的其他分组
+        for group in group_order:
+            if group in processed_groups:
+                continue
+            group_channels = [ch for ch in sorted_channels if ch.get('group_title') == group]
+            grouped_channels.extend(sorted(group_channels, key=lambda x: x.get('display_name', '').lower()))
+            processed_groups.add(group)
+        
+        # 处理剩余的分组
+        remaining_channels = [ch for ch in sorted_channels if ch.get('group_title') not in processed_groups]
         grouped_channels.extend(remaining_channels)
         
         return grouped_channels
 
-    def generate_txt(self, channels: List[Dict], rule_names: List[str] = [], sort_by: str = 'display_name', group_order: List[str] = []) -> tuple[str, str]:
+    def generate_txt(self, channels: List[Dict], rule_names: List[str] = [], sort_by: str = 'display_name', group_order: List[str] = [], sort_templates: Dict[str, List[str]] = {}) -> tuple[str, str]:
         """生成TXT格式的播放列表
         
         Args:
@@ -60,12 +95,13 @@ class M3UGenerator:
             rule_names: 规则名称列表
             sort_by: 排序字段
             group_order: 分组顺序列表
+            sort_templates: 排序模板，格式：{"分组名": ["频道1", "频道2", ...]}
         """
         # 去重处理
         filtered_channels = self._deduplicate_channels(channels)
         
         # 排序和分组处理
-        filtered_channels = self._sort_and_group_channels(filtered_channels, sort_by, group_order)
+        filtered_channels = self._sort_and_group_channels(filtered_channels, sort_by, group_order, sort_templates)
         
         # 按分组组织频道
         grouped_channels = {}
@@ -118,7 +154,7 @@ class M3UGenerator:
         return txt_content, filename
 
     def generate_m3u(self, channels: List[Dict], rule_names: List[str] = [], header_info: dict = {}, 
-                    sort_by: str = 'display_name', group_order: List[str] = []) -> tuple[str, str]:
+                    sort_by: str = 'display_name', group_order: List[str] = [], sort_templates: Dict[str, List[str]] = {}) -> tuple[str, str]:
         """生成M3U格式的播放列表
         
         Args:
@@ -127,12 +163,13 @@ class M3UGenerator:
             header_info: 头部信息
             sort_by: 排序字段
             group_order: 分组顺序列表
+            sort_templates: 排序模板，格式：{"分组名": ["频道1", "频道2", ...]}
         """
         # 去重处理
         filtered_channels = self._deduplicate_channels(channels)
         
         # 排序和分组处理
-        filtered_channels = self._sort_and_group_channels(filtered_channels, sort_by, group_order)
+        filtered_channels = self._sort_and_group_channels(filtered_channels, sort_by, group_order, sort_templates)
         
         # 确保每个频道都包含必要的字段
         for channel in filtered_channels:
@@ -176,7 +213,7 @@ class M3UGenerator:
                 extinf += f' catchup-source="{channel["catchup_source"]}"'
             
             # 添加分组信息
-            if 'group_title' in channel:
+            if 'group_title' in channel and channel["group_title"]:
                 extinf += f' group-title="{channel["group_title"]}"'
             
             # 添加频道名称

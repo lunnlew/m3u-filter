@@ -509,4 +509,17 @@ CREATE TABLE IF NOT EXISTS stream_tasks (
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     result TEXT
-)
+);
+
+-- 创建排序模板表
+CREATE TABLE IF NOT EXISTS sort_templates (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    description TEXT,
+    group_orders TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 创建排序模板表索引
+CREATE INDEX IF NOT EXISTS idx_sort_templates_name ON sort_templates(name);

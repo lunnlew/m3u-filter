@@ -384,18 +384,41 @@ async def generate_m3u_file(
         filename = f"{rule_set[1]}"
         filename = ''.join(c for c in filename if c.isalnum() or c in ('_', '-', '.'))
         
-        generator = M3UGenerator()
+        # 获取排序模板
+        cursor.execute("""
+            SELECT name, group_orders
+            FROM sort_templates
+        """)
+        sort_templates_raw = cursor.fetchall()
+        sort_templates = {}
+
+        for template_name, group_orders in sort_templates_raw:
+            try:
+                # 解析JSON格式的group_orders
+                orders = json.loads(group_orders)
+                # 合并到sort_templates中
+                for group_name, channels in orders.items():
+                    if group_name not in sort_templates:
+                        sort_templates[group_name] = []
+                    sort_templates[group_name].extend(channels)
+            except json.JSONDecodeError:
+                logger.error(f"Invalid JSON format in sort template: {template_name}")
+                continue
+        
+        # 使用M3UGenerator生成m3u文件
         header_info = {
             "generated_at": datetime.now().isoformat(),
             "provider": "M3U Filter"
         }
 
+        generator = M3UGenerator()
         m3u_content, filename = generator.generate_m3u(
-            final_channels,  # 使用处理后的频道列表
+            final_channels,
             [filename], 
             header_info,
             sort_by=sort_by,
-            group_order=group_order
+            group_order=group_order,
+            sort_templates=sort_templates  # 使用合并后的排序模板
         )
         
         # 保存到m3u文件夹
@@ -495,10 +518,31 @@ async def generate_txt_file(
         # 使用规则集合名称作为文件名
         filename = f"{rule_set[1]}"
         filename = ''.join(c for c in filename if c.isalnum() or c in ('_', '-', '.'))
+        
+        # 获取排序模板
+        cursor.execute("""
+            SELECT name, group_orders
+            FROM sort_templates
+        """)
+        sort_templates_raw = cursor.fetchall()
+        sort_templates = {}
 
+        for template_name, group_orders in sort_templates_raw:
+            try:
+                # 解析JSON格式的group_orders
+                orders = json.loads(group_orders)
+                # 合并到sort_templates中
+                for group_name, channels in orders.items():
+                    if group_name not in sort_templates:
+                        sort_templates[group_name] = []
+                    sort_templates[group_name].extend(channels)
+            except json.JSONDecodeError:
+                logger.error(f"Invalid JSON format in sort template: {template_name}")
+                continue
+        
         # 使用M3UGenerator生成TXT文件
         generator = M3UGenerator()
-        txt_content, filename = generator.generate_txt(final_channels, [filename], sort_by, group_order)
+        txt_content, filename = generator.generate_txt(final_channels, [filename], sort_by, group_order, sort_templates)
         
         # 保存到m3u文件夹
         m3u_dir = PATH_DATA_DIR / 'm3u'
