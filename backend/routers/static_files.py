@@ -3,6 +3,7 @@ from fastapi.responses import FileResponse, HTMLResponse
 import os
 import mimetypes
 import logging
+from urllib.parse import unquote
 from config import PATH_STATIC_DIR, PATH_DATA_DIR
 
 logger = logging.getLogger(__name__)
@@ -23,11 +24,12 @@ async def serve_web():
 @router.get("/static/{file_path:path}")
 async def get_static_file(file_path: str):
     """获取其他静态文件"""
-    file_location = PATH_DATA_DIR / file_path
+    decoded_path = unquote(file_path)
+    file_location = PATH_DATA_DIR / decoded_path
     
     if not file_location.exists():
         raise HTTPException(status_code=404, detail="文件不存在")
-        
+    
     if not file_location.is_file():
         raise HTTPException(status_code=400, detail="请求的不是文件")
         
@@ -61,7 +63,9 @@ async def get_static_file(file_path: str):
 @router.get("{file_path:path}")
 async def get_web_file(file_path: str):
     """获取前端资源文件"""
-    file_location = PATH_STATIC_DIR / file_path
+    # Decode URL-encoded file path
+    decoded_path = unquote(file_path)
+    file_location = PATH_STATIC_DIR / decoded_path
 
     if not file_location.exists():
         raise HTTPException(status_code=404, detail="前端文件不存在")
