@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { Table, Input, Select, Button, Space, message, Popconfirm, Tooltip } from 'antd';
-import { useStreamTracks, useStreamTrackDelete, useStreamTrackTest, useStreamTrackTestAll } from '../api/streamTracks';
+import { Table, Input, Select, Button, Space, App, Popconfirm, Tooltip } from 'antd';
+import { useStreamTracks, useStreamTrackDelete, useStreamTrackTest, useStreamTrackTestAll } from '../hooks/streamTracks';
 import { StreamTrack, PaginatedStreamTracks } from '../types/streamTrack';
 
 const { Option } = Select;
 
 export default function StreamTrackList() {
+  const { message } = App.useApp();
   const [searchName, setSearchName] = useState('');
   const [searchGroup, setSearchGroup] = useState('');
   const [searchStatus, setSearchStatus] = useState();
@@ -53,7 +54,7 @@ export default function StreamTrackList() {
 
   const handleTest = async (id: number) => {
     try {
-      const { data, message: successMsg } = await testMutation.mutateAsync(id);
+      const { message: successMsg } = await testMutation.mutateAsync(id);
       message.success(successMsg || '测试成功');
     } catch (error: any) {
       message.error(error.message || '测试失败');
@@ -62,7 +63,7 @@ export default function StreamTrackList() {
 
   const handleTestAll = async () => {
     try {
-      const { data, message: successMsg } = await testAllMutation.mutateAsync();
+      const { message: successMsg } = await testAllMutation.mutateAsync();
       message.success(successMsg || '全部测试成功');
     } catch (error: any) {
       message.error(error.message || '测试失败');

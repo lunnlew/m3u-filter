@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { Table, Button, Modal, message, Tooltip } from 'antd';
+import { Table, Button, Modal, App, Tooltip } from 'antd';
 import { StreamSource } from '../types/stream';
-import { useStreamSources, useStreamSourceMutation, useStreamSourceDelete, useStreamSourceSync } from '../api/streamSources';
+import { useStreamSources, useStreamSourceMutation, useStreamSourceDelete, useStreamSourceSync } from '../hooks/streamSources';
 import { StreamSourceForm } from './StreamSourceForm';
 
 export const StreamSourceList: React.FC = () => {
+  const { message } = App.useApp();
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [editingSource, setEditingSource] = useState<StreamSource | null>(null);
 
@@ -15,8 +16,8 @@ export const StreamSourceList: React.FC = () => {
 
   const handleDelete = async (id: number) => {
     try {
-      await deleteMutation.mutateAsync(id);
-      message.success('删除直播源成功');
+      const result = await deleteMutation.mutateAsync(id);
+      message.success(result.message || '删除直播源成功');
     } catch (err) {
       message.error(err instanceof Error ? err.message : '删除直播源时发生错误');
     }
@@ -24,8 +25,8 @@ export const StreamSourceList: React.FC = () => {
 
   const handleSync = async (id: number) => {
     try {
-      await syncMutation.mutateAsync(id);
-      message.success('同步直播源成功');
+      const result = await syncMutation.mutateAsync(id);
+      message.success(result.message || '同步直播源成功');
     } catch (err) {
       message.error(err instanceof Error ? err.message : '同步直播源时发生错误');
     }

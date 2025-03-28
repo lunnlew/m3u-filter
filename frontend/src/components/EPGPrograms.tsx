@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { Table, DatePicker, Input, Space, Button, Modal, message } from 'antd';
+import { Table, DatePicker, Input, Space, Button, Modal, App } from 'antd';
 import type { TableProps } from 'antd';
 import dayjs from 'dayjs';
-import { useClearAllData, useEPGPrograms, useEPGSync } from '../api/epgPrograms';
+import { useClearAllData, useEPGPrograms, useEPGSync } from '../hooks/epgPrograms';
 
 interface EPGProgram {
   id: number;
@@ -18,6 +18,7 @@ interface EPGProgram {
 const { RangePicker } = DatePicker;
 
 const EPGPrograms = () => {
+  const { message } = App.useApp();
   const [channel, setChannel] = useState('');
   const [timeRange, setTimeRange] = useState<[dayjs.Dayjs | null, dayjs.Dayjs | null]>([null, null]);
   const [detailModalVisible, setDetailModalVisible] = useState(false);

@@ -1,16 +1,17 @@
 import { useState } from 'react';
-import { Table, Button, Modal, Form, Input, Switch, message, Space, Select } from 'antd';
+import { Table, Button, Modal, Form, Input, Switch, App, Space, Select } from 'antd';
 import { useFilterRuleSets, useFilterRuleSetMutation, useFilterRuleSetDelete, useAddRuleToSet, useRemoveRuleFromSet, useGenerateM3U, useGenerateTXT  // 新增TXT生成钩子
-} from '../api/filterRuleSets';
-import { useFilterRules } from '../api/filterRules';
+} from '../hooks/filterRuleSets';
+import { useFilterRules } from '../hooks/filterRules';
 import { FilterRuleSet, FilterRule } from '../types/filter';
-import { useSiteConfig } from '../api/siteConfig';
+import { useSiteConfig } from '../hooks/siteConfig';
 import { FilterRuleSetForm } from './FilterRuleSetForm';
 import './FilterRuleSetList.css';
 import { RuleSetRulesForm } from './RuleSetRulesForm';
 
 export const FilterRuleSetList = () => {
-    const [form] = Form.useForm();
+    const { message } = App.useApp();
+    const [form] = Form.useForm<FilterRuleSet>();
     const [isModalVisible, setIsModalVisible] = useState(false);
     const [isRuleModalVisible, setIsRuleModalVisible] = useState(false);
     const [editingId, setEditingId] = useState<number | null>(null);
@@ -28,7 +29,7 @@ export const FilterRuleSetList = () => {
 
     const handleEdit = (record: FilterRuleSet) => {
         setEditingId(record.id);
-        form.setFieldsValue(record);
+        // Remove form.setFieldsValue here as it's handled in FilterRuleSetForm
         setIsModalVisible(true);
     };
 
@@ -77,7 +78,7 @@ export const FilterRuleSetList = () => {
     // 生成M3U文件
     const handleGenerateM3U = async (id: number) => {
         try {
-            const { data: result } = await generateM3U(id);
+            const result = await generateM3U(id);
             const fullUrl = `${siteConfig.base_url}${siteConfig.static_url_prefix}${result.url_path}`;
             Modal.success({
                 title: 'M3U文件生成成功',
@@ -96,7 +97,7 @@ export const FilterRuleSetList = () => {
     // 生成M3U文件
     const handleGenerateTXT = async (id: number) => {
         try {
-            const { data: result } = await generateTXT(id);
+            const result = await generateTXT(id);
             const fullUrl = `${siteConfig.base_url}${siteConfig.static_url_prefix}${result.url_path}`;
             Modal.success({
                 title: 'M3U文件生成成功',
@@ -206,7 +207,10 @@ export const FilterRuleSetList = () => {
             <Modal
                 title={editingId ? '编辑筛选合集' : '创建筛选合集'}
                 open={isModalVisible}
-                onCancel={() => setIsModalVisible(false)}
+                onCancel={() => {
+                    setIsModalVisible(false);
+                    form.resetFields(); // Reset form when closing modal
+                }}
                 onOk={() => form.submit()}
                 okText="确认"
                 cancelText="取消"
@@ -216,7 +220,10 @@ export const FilterRuleSetList = () => {
                 <FilterRuleSetForm
                     form={form}
                     onSubmit={handleSubmit}
-                    onCancel={() => setIsModalVisible(false)}
+                    onCancel={() => {
+                        setIsModalVisible(false);
+                        form.resetFields(); // Reset form when canceling
+                    }}
                     initialValues={editingId ? ruleSets.find(set => set.id === editingId) : undefined}
                 />
             </Modal>

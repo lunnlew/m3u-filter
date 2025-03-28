@@ -1,72 +1,45 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import request, { ApiResponse } from '../utils/request';
+import { request } from '../utils/request';
+import type { EPGChannel } from '../types/epg';
+import { ApiResponse } from '@/types/api';
+import { GenerateEPGResponse } from '@/hooks/epgChannels';
 
-interface EPGChannel {
-  id?: number;
-  channel_id: string;
-  display_name: string;
-  language: string;
-  category?: string;
-  logo_url?: string;
-}
-
-// 获取EPG频道列表
-export const useEPGChannels = () => {
-  return useQuery<EPGChannel[]>({
-    queryKey: ['epg-channels'],
-    queryFn: async () => request.get('/epg-channels').then((res) => res.data),
+export const fetchEPGChannels = async (): Promise<EPGChannel[]> => {
+  const response = await request<EPGChannel[]>({
+    method: 'get',
+    url: '/epg-channels'
   });
+  return response.data;
 };
 
-// 添加或更新EPG频道
-export const useEPGChannelMutation = () => {
-  const queryClient = useQueryClient();
-
-  return useMutation<ApiResponse<EPGChannel>, unknown, EPGChannel>({
-    mutationFn: (values: EPGChannel) => {
-      if (values.id) {
-        return request.put(`/epg-channels/${values.id}`, values);
-      }
-      return request.post('/epg-channels', values);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['epg-channels'] });
-    },
+export const createOrUpdateEPGChannel = async (values: EPGChannel): Promise<ApiResponse<EPGChannel>> => {
+  const response = await request<ApiResponse<EPGChannel>>({
+    method: values.id ? 'put' : 'post',
+    url: values.id ? `/epg-channels/${values.id}` : '/epg-channels',
+    data: values
   });
+  return response.data;
 };
 
-// 删除EPG频道
-export const useEPGChannelDelete = () => {
-  const queryClient = useQueryClient();
-
-  return useMutation<ApiResponse<EPGChannel>, unknown, number>({
-    mutationFn: (id: number) => request.delete(`/epg-channels/${id}`),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['epg-channels'] });
-    }
+export const deleteEPGChannel = async (id: number): Promise<ApiResponse<EPGChannel>> => {
+  const response = await request<ApiResponse<EPGChannel>>({
+    method: 'delete',
+    url: `/epg-channels/${id}`
   });
+  return response.data;
 };
 
-// 清空所有数据
-export const useClearAllData = () => {
-  const queryClient = useQueryClient();
-
-  return useMutation<ApiResponse<EPGChannel>>({
-    mutationFn: () => request.delete('/epg-channels-clear-all'),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['epg-channels'] });
-    }
+export const clearAllEPGChannels = async (): Promise<ApiResponse<EPGChannel>> => {
+  const response = await request<ApiResponse<EPGChannel>>({
+    method: 'delete',
+    url: '/epg-channels-clear-all'
   });
+  return response.data;
 };
 
-export interface GenerateEPGResponse {
-  url_path: string;
-}
-// 生成EPG文件
-export const useGenerateEPG = () => {
-  return useMutation<ApiResponse<GenerateEPGResponse>, unknown>({
-    mutationFn: async () => {
-      return await request.post(`/epg-channels/export-xml`);
-    }
+export const generateEPGXML = async (): Promise<GenerateEPGResponse> => {
+  const response = await request<GenerateEPGResponse>({
+    method: 'post',
+    url: '/epg-channels/export-xml'
   });
+  return response.data;
 };

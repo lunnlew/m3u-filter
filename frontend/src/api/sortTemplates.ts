@@ -1,42 +1,28 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { SortTemplate } from '../types/sortTemplate';
-import request, { ApiResponse } from '../utils/request';
+import { request } from '../utils/request';
+import type { SortTemplate } from '../types/sortTemplate';
+import { ApiResponse } from '@/types/api';
 
-// 获取所有排序模板
-export const useSortTemplates = () => {
-  return useQuery<SortTemplate[]>({
-    queryKey: ['sort-templates'],
-    queryFn: async () => {
-      return await request.get('/sort-templates').then((res) => res.data);
-    },
+export const fetchSortTemplates = async (): Promise<SortTemplate[]> => {
+  const response = await request<SortTemplate[]>({
+    method: 'get',
+    url: '/sort-templates'
   });
+  return response.data;
 };
 
-// 创建或更新排序模板
-export const useSortTemplateMutation = () => {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async (values: Omit<SortTemplate, 'id'> & { id?: number }) => {
-      if (values.id) {
-        return await request.put(`/sort-templates/${values.id}`, values);
-      }
-      return await request.post('/sort-templates', values);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['sort-templates'] });
-    },
+export const createOrUpdateSortTemplate = async (values: Omit<SortTemplate, 'id'> & { id?: number }): Promise<ApiResponse<SortTemplate>> => {
+  const response = await request<ApiResponse<SortTemplate>>({
+    method: values.id ? 'put' : 'post',
+    url: values.id ? `/sort-templates/${values.id}` : '/sort-templates',
+    data: values
   });
+  return response.data;
 };
 
-// 删除排序模板
-export const useSortTemplateDelete = () => {
-  const queryClient = useQueryClient();
-
-  return useMutation<ApiResponse<void>, unknown, number>({
-    mutationFn: (id: number) => request.delete(`/sort-templates/${id}`),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['sort-templates'] });
-    }
+export const deleteSortTemplate = async (id: number): Promise<ApiResponse<void>> => {
+  const response = await request<ApiResponse<void>>({
+    method: 'delete',
+    url: `/sort-templates/${id}`
   });
+  return response.data;
 };

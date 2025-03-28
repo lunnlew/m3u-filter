@@ -15,12 +15,9 @@ export const FilterRuleSetForm: React.FC<FilterRuleSetFormProps> = ({
     onCancel,
     form
 }) => {
-
-    React.useEffect(() => {
+    useEffect(() => {
         if (initialValues) {
             form.setFieldsValue(initialValues);
-        } else {
-            form.resetFields();
         }
     }, [initialValues, form]);
 
@@ -29,7 +26,7 @@ export const FilterRuleSetForm: React.FC<FilterRuleSetFormProps> = ({
             form={form}
             onFinish={onSubmit}
             layout="vertical"
-            initialValues={{ sync_interval: 6, ...initialValues }}
+            // Remove initialValues from Form level
         >
             <Form.Item name="id" hidden>
                 <Input />
@@ -51,14 +48,15 @@ export const FilterRuleSetForm: React.FC<FilterRuleSetFormProps> = ({
                 name="enabled"
                 label="启用"
                 valuePropName="checked"
-                initialValue={true}
+                // Move initialValue here if no value from initialValues
+                initialValue={initialValues?.enabled ?? true}
             >
                 <Switch />
             </Form.Item>
             <Form.Item
                 name="logic_type"
                 label="逻辑运算符"
-                initialValue="AND"
+                initialValue={initialValues?.logic_type ?? 'AND'}
             >
                 <Select
                     options={[
@@ -71,6 +69,7 @@ export const FilterRuleSetForm: React.FC<FilterRuleSetFormProps> = ({
                 name="sync_interval"
                 label="同步周期（小时）"
                 rules={[{ required: true, message: '请输入同步周期' }]}
+                initialValue={initialValues?.sync_interval ?? 6}
             >
                 <InputNumber min={1} max={24} />
             </Form.Item>

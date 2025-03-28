@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
-import { Table, Button, Modal, message, Input, Space } from 'antd';
+import { Table, Button, Modal, App, Input, Space } from 'antd';
 import type { TableProps } from 'antd';
 import { EPGChannelForm } from './EPGChannelForm';
-import { useEPGChannels, useEPGChannelMutation, useEPGChannelDelete, useClearAllData, useGenerateEPG } from '../api/epgChannels';
-import { useSiteConfig } from '../api/siteConfig';
+import { useEPGChannels, useEPGChannelMutation, useEPGChannelDelete, useClearAllData, useGenerateEPG } from '../hooks/epgChannels';
+import { useSiteConfig } from '../hooks/siteConfig';
 
 interface EPGChannel {
   id?: number;
@@ -15,6 +15,7 @@ interface EPGChannel {
 }
 
 export const EPGChannelList: React.FC = () => {
+  const { message } = App.useApp();
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [editingChannel, setEditingChannel] = useState<EPGChannel | null>(null);
   const [searchText, setSearchText] = useState('');
@@ -78,7 +79,7 @@ export const EPGChannelList: React.FC = () => {
   const handleExportEPG = async () => {
     try {
       setIsExporting(true);
-      const { data: result } = await generateEPG();
+      const result = await generateEPG();
       const fullUrl = `${siteConfig.base_url}${siteConfig.static_url_prefix}${result.url_path}`;
       Modal.success({
         title: 'EPG文件生成成功',

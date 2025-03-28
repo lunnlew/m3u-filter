@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
-import { Table, Button, Modal, message, Tooltip } from 'antd';
+import { Table, Button, Modal, App, Tooltip } from 'antd';
 import { EPGSourceForm } from './EPGSourceForm';
 import { EPGSource } from '../types/epg';
-import { useEPGSources, useEPGSourceMutation, useEPGSourceDelete, useEPGSourceSync } from '../api/epgSources';
-import { render } from 'react-dom';
+import { useEPGSources, useEPGSourceMutation, useEPGSourceDelete, useEPGSourceSync } from '../hooks/epgSources';
 
 export const EPGSourceList: React.FC = () => {
+  const { message } = App.useApp();
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [editingSource, setEditingSource] = useState<EPGSource | null>(null);
 

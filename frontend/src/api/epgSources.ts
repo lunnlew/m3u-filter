@@ -1,62 +1,36 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { EPGSource } from '../types/epg';
-import request, { ApiResponse } from '../utils/request';
+import { request } from '../utils/request';
+import type { EPGSource } from '../types/epg';
+import { ApiResponse } from '@/types/api';
 
-// 获取EPG源列表
-export const useEPGSources = () => {
-  return useQuery<EPGSource[]>({
-    queryKey: ['epg-sources'],
-    queryFn: async () => {
-      return await request.get('/epg-sources').then((res) => res.data);
-    },
+export const fetchEPGSources = async (): Promise<EPGSource[]> => {
+  const response = await request<EPGSource[]>({
+    method: 'get',
+    url: '/epg-sources'
   });
+  return response.data;
 };
 
-// 添加或更新EPG源
-export const useEPGSourceMutation = () => {
-  const queryClient = useQueryClient();
-
-  return useMutation<ApiResponse<EPGSource>, unknown, EPGSource>({    
-    mutationFn: async (values: EPGSource) => {
-      const response = values.id
-        ? await request.put<ApiResponse<EPGSource>>(`/epg-sources/${values.id}`, values)
-        : await request.post<ApiResponse<EPGSource>>('/epg-sources', values);
-      return response.data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['epg-sources'] });
-    },
+export const createOrUpdateEPGSource = async (values: EPGSource): Promise<ApiResponse<EPGSource>> => {
+  const response = await request<EPGSource>({
+    method: values.id ? 'put' : 'post',
+    url: values.id ? `/epg-sources/${values.id}` : '/epg-sources',
+    data: values
   });
+  return response;
 };
 
-// 删除EPG源
-export const useEPGSourceDelete = () => {
-  const queryClient = useQueryClient();
-
-  return useMutation<ApiResponse<EPGSource>, unknown, number>({
-    mutationFn: async (id: number) => {
-      return await request.delete(`/epg-sources/${id}`);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['epg-sources'] });
-    }
+export const deleteEPGSource = async (id: number): Promise<void> => {
+  const response = await request<void>({
+    method: 'delete',
+    url: `/epg-sources/${id}`
   });
+  return response.data;
 };
 
-interface SyncResponse {
-  message: string;
-}
-
-// 同步EPG源
-export const useEPGSourceSync = () => {
-  const queryClient = useQueryClient();
-
-  return useMutation<ApiResponse<SyncResponse>, unknown, number>({
-    mutationFn: async (id: number) => {
-      return await request.post(`/epg-sources/${id}/sync`);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['epg-sources'] });
-    }
+export const syncEPGSource = async (id: number): Promise<ApiResponse> => {
+  const response = await request<ApiResponse>({
+    method: 'post',
+    url: `/epg-sources/${id}/sync`
   });
+  return response;
 };

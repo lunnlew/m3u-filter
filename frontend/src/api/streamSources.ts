@@ -1,54 +1,36 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { StreamSource } from '../types/stream';
-import request, { ApiResponse } from '../utils/request';
+import { request } from '../utils/request';
+import type { StreamSource } from '../types/stream';
+import { ApiResponse } from '@/types/api';
 
-// 获取直播源列表
-export const useStreamSources = () => {
-  return useQuery<StreamSource[]>({
-    queryKey: ['stream-sources'],
-    queryFn: async () => {
-      return await request.get('/stream-sources').then((res) => res.data);
-    },
+export const fetchStreamSources = async (): Promise<StreamSource[]> => {
+  const response = await request<StreamSource[]>({
+    method: 'get',
+    url: '/stream-sources'
   });
+  return response.data;
 };
 
-// 添加或更新直播源
-export const useStreamSourceMutation = () => {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async (values: StreamSource) => {
-      const response = values.id
-        ? await request.put(`/stream-sources/${values.id}`, values)
-        : await request.post('/stream-sources', values);
-      return response.data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['stream-sources'] });
-    },
+export const createOrUpdateStreamSource = async (values: StreamSource): Promise<StreamSource> => {
+  const response = await request<StreamSource>({
+    method: values.id ? 'put' : 'post',
+    url: values.id ? `/stream-sources/${values.id}` : '/stream-sources',
+    data: values
   });
+  return response.data;
 };
 
-// 删除直播源
-export const useStreamSourceDelete = () => {
-  const queryClient = useQueryClient();
-
-  return useMutation<ApiResponse<StreamSource>, unknown, number>({
-    mutationFn: (id: number) => request.delete(`/stream-sources/${id}`),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['stream-sources'] });
-    }
+export const deleteStreamSource = async (id: number): Promise<ApiResponse> => {
+  const response = await request<ApiResponse>({
+    method: 'delete',
+    url: `/stream-sources/${id}`
   });
+  return response;
 };
 
-// 同步直播源
-export const useStreamSourceSync = () => {
-  const queryClient = useQueryClient();
-
-  return useMutation<ApiResponse<StreamSource>, unknown, number>({
-    mutationFn: (id: number) => request.post(`/stream-sources/${id}/sync`),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['stream-sources'] });
-    }
+export const syncStreamSource = async (id: number): Promise<ApiResponse> => {
+  const response = await request<ApiResponse>({
+    method: 'post',
+    url: `/stream-sources/${id}/sync`
   });
+  return response;
 };

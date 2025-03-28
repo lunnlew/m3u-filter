@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { Table, Button, Space, Popconfirm, message, Modal } from 'antd';
+import { Table, Button, Space, Popconfirm, App, Modal } from 'antd';
 import { DeleteOutlined, EditOutlined } from '@ant-design/icons';
 import { SortTemplate } from '../types/sortTemplate';
-import { useSortTemplates, useSortTemplateDelete } from '../api/sortTemplates';
+import { useSortTemplates, useSortTemplateDelete } from '../hooks/sortTemplates';
 import SortTemplateForm from './SortTemplateForm';
 
 const SortTemplateList: React.FC = () => {
+  const { message } = App.useApp();
   const [editingTemplate, setEditingTemplate] = useState<SortTemplate | undefined>();
   const [isModalVisible, setIsModalVisible] = useState(false);
 

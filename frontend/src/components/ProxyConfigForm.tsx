@@ -1,6 +1,6 @@
 import React from 'react';
-import { Form, Input, Switch, Select, InputNumber, Button, message } from 'antd';
-import { useProxyConfig, useUpdateProxyConfig } from '../api/proxyConfig';
+import { Form, Input, Switch, Select, InputNumber, Button, App } from 'antd';
+import { useProxyConfig, useUpdateProxyConfig } from '../hooks/proxyConfig';
 
 interface ProxyConfig {
   enabled: boolean;
@@ -12,6 +12,7 @@ interface ProxyConfig {
 }
 
 export const ProxyConfigForm: React.FC = () => {
+  const { message } = App.useApp();
   const [form] = Form.useForm();
   const { data: proxyConfig, isLoading: isLoadingConfig } = useProxyConfig();
   const { mutate: updateConfig, isPending: isUpdating } = useUpdateProxyConfig();

@@ -1,33 +1,19 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import request, { ApiResponse } from '../utils/request';
+import { request } from '../utils/request';
+import type { ProxyConfig } from '../types/proxy';
 
-export interface ProxyConfig {
-  enabled: boolean;
-  proxy_type: 'http' | 'socks5';
-  host: string;
-  port: number;
-  username?: string;
-  password?: string;
-}
-
-export const useProxyConfig = () => {
-  return useQuery<ProxyConfig>({
-    queryKey: ['proxy-config'],
-    queryFn: async () => {
-      return await request.get('/proxy-config').then((res) => res.data);
-    },
+export const fetchProxyConfig = async (): Promise<ProxyConfig> => {
+  const response = await request<ProxyConfig>({
+    method: 'get',
+    url: '/proxy-config'
   });
+  return response.data;
 };
 
-export const useUpdateProxyConfig = () => {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async (config: ProxyConfig) => {
-      return await request.put<ApiResponse<ProxyConfig>>('/proxy-config', config);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['proxy-config'] });
-    },
+export const updateProxyConfig = async (config: ProxyConfig): Promise<void> => {
+  const response = await request<void>({
+    method: 'put',
+    url: '/proxy-config',
+    data: config
   });
+  return response.data;
 };

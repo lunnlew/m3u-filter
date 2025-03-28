@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
-import { Table, Button, Switch, Space, Modal, message } from 'antd';
+import { Table, Button, Switch, Space, Modal, App } from 'antd';
 import { FilterRuleForm } from './FilterRuleForm';
 import type { FilterRule } from '../types/filter';
-import { useFilterRules, useFilterRuleMutation, useFilterRuleDelete, useFilterRuleToggle, useApplyFilterRules, useGenerateM3U } from '../api/filterRules';
-import { useSiteConfig } from '../api/siteConfig';
+import { useFilterRules, useFilterRuleMutation, useFilterRuleDelete, useFilterRuleToggle, useApplyFilterRules, useGenerateM3U } from '../hooks/filterRules';
+import { useSiteConfig } from '../hooks/siteConfig';
 
 interface FilterRuleListProps { }
 
 const FilterRuleList: React.FC<FilterRuleListProps> = () => {
+  const { message } = App.useApp();
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [editingRule, setEditingRule] = useState<FilterRule | null>(null);
   const { data: rules = [], isLoading } = useFilterRules();

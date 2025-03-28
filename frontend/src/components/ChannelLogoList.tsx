@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { Table, Button, Input, Space, Modal, Form, InputNumber, message } from 'antd';
+import { Table, Button, Input, Space, Modal, Form, InputNumber, App } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined } from '@ant-design/icons';
-import { useChannelLogos, useChannelLogoMutation, useChannelLogoDelete } from '../api/channelLogo';
-import type { ChannelLogo } from '../api/channelLogo';
-import { useSiteConfig } from '../api/siteConfig';
+import { useChannelLogos, useChannelLogoMutation, useChannelLogoDelete } from '../hooks/channelLogo';
+import { useSiteConfig } from '../hooks/siteConfig';
+import { ChannelLogo } from '@/types/channel';
 
 export const ChannelLogoList: React.FC = () => {
+  const { message } = App.useApp();
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [editingLogo, setEditingLogo] = useState<ChannelLogo | null>(null);
   const [form] = Form.useForm();

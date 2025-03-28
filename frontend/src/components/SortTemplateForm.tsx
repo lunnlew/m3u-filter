@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
-import { Form, Input, Button, message } from 'antd';
+import { Form, Input, Button, App } from 'antd';
 import { SortTemplate } from '../types/sortTemplate';
-import { useSortTemplateMutation } from '../api/sortTemplates';
+import { useSortTemplateMutation } from '../hooks/sortTemplates';
 
 interface SortTemplateFormProps {
   template?: SortTemplate;
@@ -9,6 +9,7 @@ interface SortTemplateFormProps {
 }
 
 const SortTemplateForm: React.FC<SortTemplateFormProps> = ({ template, onSuccess }) => {
+  const { message } = App.useApp();
   const [form] = Form.useForm();
   const mutation = useSortTemplateMutation();
 

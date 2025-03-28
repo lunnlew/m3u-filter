@@ -2,15 +2,22 @@ export interface StreamSource {
   id?: number;
   name: string;
   url: string;
-  type: 'm3u' | 'txt';
-  last_update: string | null;
-  active: boolean;
+  enabled: boolean;
+  last_sync?: string;
   sync_interval?: number;
-  proxy?: {
-    type: 'HTTP' | 'SOCKS5';
-    server: string;
-    port: number;
-    username?: string;
-    password?: string;
-  };
+}
+
+export interface StreamTrack {
+  id: number;
+  name: string;
+  url: string;
+  group_title: string;
+  logo?: string;
+  source_id: number;
+  test_status?: 'pending' | 'success' | 'failed';
+}
+
+export interface PaginatedStreamTracks {
+  data: StreamTrack[];
+  total: number;
 }

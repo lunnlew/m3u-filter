@@ -1,14 +1,6 @@
 import React from 'react';
 import { Form, Input, Button, Space } from 'antd';
-
-interface EPGChannel {
-  id?: number;
-  display_name: string;
-  channel_id: string;
-  language: string;
-  category?: string;
-  logo_url?: string;
-}
+import { EPGChannel } from '@/types/epg';
 
 interface EPGChannelFormProps {
   initialValues?: EPGChannel;
@@ -24,11 +16,11 @@ export const EPGChannelForm: React.FC<EPGChannelFormProps> = ({
   const [form] = Form.useForm<EPGChannel>();
 
   React.useEffect(() => {
-      if (initialValues) {
-          form.setFieldsValue(initialValues);
-      } else {
-          form.resetFields();
-      }
+    if (initialValues) {
+      form.setFieldsValue(initialValues);
+    } else {
+      form.resetFields();
+    }
   }, [initialValues, form]);
 
   return (

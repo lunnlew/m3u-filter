@@ -1,19 +1,14 @@
-import axios, { AxiosResponse } from 'axios';
-import { message } from 'antd';
+import axios, { AxiosRequestConfig, AxiosResponse } from 'axios';
+import { App } from 'antd';
+import { ApiResponse } from '@/types/api';
 
-export interface ApiResponse<T = any> {
-  data: T;
-  message: string;
-  code: number;
-}
-
-const request = axios.create({
-  baseURL: 'http://localhost:3232/api',
+const _request = axios.create({
+  baseURL: '/api',
   timeout: 30000,
 });
 
 // 请求拦截器
-request.interceptors.request.use(
+_request.interceptors.request.use(
   (config) => {
     return config;
   },
@@ -23,15 +18,22 @@ request.interceptors.request.use(
 );
 
 // 响应拦截器
-request.interceptors.response.use(
-  (response: AxiosResponse) => {
+_request.interceptors.response.use(
+  <T>(response: AxiosResponse<T>) => {
     return response.data;
   },
   (error) => {
+    const { message } = App.useApp();
     const errorMessage = error.response?.data?.message || error.message || '请求失败';
     message.error(errorMessage);
     return Promise.reject(error);
   }
 );
 
-export default request;
+export const request = <T>(config: AxiosRequestConfig): Promise<ApiResponse<T>> => {
+  return _request(config).then((response: AxiosResponse) => {
+    return response as unknown as ApiResponse<T>;
+  });
+};
+
+export default _request;
