@@ -37,14 +37,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY --from=builder /app/dist/m3u_filter_backend /app/m3u-filter
 COPY --from=frontend-builder /app/dist ./web
 
-# 设置环境变量
+# 设置环境变量g
 ENV PYTHONUNBUFFERED=1 \
     TZ=Asia/Shanghai \
-    M3U_FILTER_DATA_ROOT=/app/data \
-    M3U_FILTER_RESOURCE_ROOT=/app/data/resource \
-    M3U_FILTER_LOGS_ROOT=/app/data/logs \
-    M3U_FILTER_LOGOS_ROOT=/app/data/logos \
-    M3U_FILTER_WEB_ROOT=/app/web
+    M3U_FILTER_DATA_ROOT=/app/data
 
 VOLUME /app/data
 EXPOSE 3232
