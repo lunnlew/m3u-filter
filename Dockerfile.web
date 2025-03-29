@@ -13,7 +13,6 @@ WORKDIR /app
 # 安装构建依赖
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
-    ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
 # 安装Python依赖
@@ -26,11 +25,13 @@ COPY backend .
 RUN pyinstaller --noconfirm --clean pyinstaller.spec
 
 # 最终镜像
-FROM --platform=$BUILDPLATFORM python:3.11-alpine
+FROM --platform=$BUILDPLATFORM python:3.11-slim
 WORKDIR /app
 
-# 安装FFmpeg
-RUN apk add --no-cache ffmpeg
+# 安装依赖
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
 
 # 仅复制必要的运行时文件
 COPY --from=builder /app/dist/m3u_filter_backend /app/m3u-filter
@@ -42,8 +43,7 @@ ENV PYTHONUNBUFFERED=1 \
     M3U_FILTER_DATA_ROOT=/app/data \
     M3U_FILTER_WEB_ROOT=/app/data/web \
     M3U_FILTER_RESOURCE_ROOT=/app/data/resource \
-    M3U_FILTER_LOGS_ROOT=/app/data/logs \
-    M3U_FILTER_LOGOS_ROOT=/app/data/logos
+    M3U_FILTER_LOGS_ROOT=/app/data/logs
 
 VOLUME /app/data
 EXPOSE 3232
