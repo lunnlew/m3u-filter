@@ -4,7 +4,7 @@ WORKDIR /app
 COPY frontend/package.json frontend/pnpm-lock.yaml ./
 RUN corepack enable && pnpm install --no-frozen-lockfile --force
 COPY frontend .
-RUN pnpm run build
+RUN pnpm run msw && pnpm run build
 
 # 构建后端
 FROM --platform=$BUILDPLATFORM python:3.11-slim AS builder
@@ -40,6 +40,7 @@ COPY --from=frontend-builder /app/dist ./web
 # 设置环境变量g
 ENV PYTHONUNBUFFERED=1 \
     TZ=Asia/Shanghai \
+    M3U_FILTER_LOG_LEVEL=INFO \
     M3U_FILTER_DATA_ROOT=/app/data \
     M3U_FILTER_WEB_ROOT=/app/web \
     M3U_FILTER_DOMAIN_URL=http://localhost:3232
