@@ -17,6 +17,11 @@ pub fn run() {
     tauri::Builder::default()
         .setup(|app| {
             let _window = app.get_webview_window("main").unwrap(); // Add underscore
+            #[cfg(debug_assertions)] // only include this code on debug builds
+            {
+                _window.open_devtools();
+                _window.close_devtools();
+            }
             Ok(())
         })
         .on_window_event(|_window, event| {  // Add underscore

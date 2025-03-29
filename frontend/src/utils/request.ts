@@ -2,8 +2,16 @@ import axios, { AxiosRequestConfig, AxiosResponse } from 'axios';
 import { App } from 'antd';
 import { ApiResponse } from '@/types/api';
 
+const getBaseURL = () => {
+  // 判断是否在 Tauri 环境中运行
+  if (window.__TAURI_INTERNALS__) {
+    return 'http://localhost:3232/api';
+  }
+  return '/api';
+};
+
 const _request = axios.create({
-  baseURL: '/api',
+  baseURL: getBaseURL(),
   timeout: 30000,
 });
 
