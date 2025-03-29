@@ -61,7 +61,7 @@ async def get_static_file(file_path: str):
     
     return FileResponse(file_location, **kwargs)
 
-@router.get("{file_path:path}")
+@router.get("/static/{file_path:path}")
 async def get_web_file(file_path: str):
     """获取前端资源文件"""
     # Decode URL-encoded file path
