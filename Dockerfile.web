@@ -27,7 +27,7 @@ RUN pip install --no-cache-dir -r requirements.txt && \
 
 # 复制后端代码并构建
 COPY backend .
-RUN pyinstaller --noconfirm --clean --strip pyinstaller.spec
+RUN pyinstaller --noconfirm --clean pyinstaller.spec
 
 # 最终镜像
 FROM --platform=$BUILDPLATFORM alpine:3.19
