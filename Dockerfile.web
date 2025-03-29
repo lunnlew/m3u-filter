@@ -26,8 +26,11 @@ COPY backend .
 RUN pyinstaller --noconfirm --clean pyinstaller.spec
 
 # 最终镜像
-FROM --platform=$BUILDPLATFORM jrottenberg/ffmpeg:4.1-alpine
+FROM --platform=$BUILDPLATFORM python:3.11-alpine
 WORKDIR /app
+
+# 安装FFmpeg
+RUN apk add --no-cache ffmpeg
 
 # 仅复制必要的运行时文件
 COPY --from=builder /app/dist/m3u_filter_backend /app/m3u-filter
