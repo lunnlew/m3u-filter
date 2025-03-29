@@ -16,7 +16,8 @@ RUN apk add --no-cache \
     build-base \
     python3-dev \
     musl-dev \
-    zlib-dev
+    zlib-dev \
+    linux-headers
 
 # 安装Python依赖
 COPY backend/requirements.txt .
