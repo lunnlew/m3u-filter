@@ -16,7 +16,7 @@ export const FilterRuleSetList = () => {
     const [isRuleModalVisible, setIsRuleModalVisible] = useState(false);
     const [editingId, setEditingId] = useState<number | null>(null);
     const [selectedRuleSetId, setSelectedRuleSetId] = useState<number | null>(null);
-    const { data: siteConfig = { base_url: '', static_url_prefix: '' } } = useSiteConfig();
+    const { data: siteConfig = { base_url: '', resource_url_prefix: '' } } = useSiteConfig();
 
     const { data: ruleSets = [], isLoading } = useFilterRuleSets();
     const { data: rules = [] } = useFilterRules();
@@ -79,7 +79,7 @@ export const FilterRuleSetList = () => {
     const handleGenerateM3U = async (id: number) => {
         try {
             const result = await generateM3U(id);
-            const fullUrl = `${siteConfig.base_url}${siteConfig.static_url_prefix}${result.url_path}`;
+            const fullUrl = `${siteConfig.base_url}${siteConfig.resource_url_prefix}${result.url_path}`;
             Modal.success({
                 title: 'M3U文件生成成功',
                 content: (
@@ -98,7 +98,7 @@ export const FilterRuleSetList = () => {
     const handleGenerateTXT = async (id: number) => {
         try {
             const result = await generateTXT(id);
-            const fullUrl = `${siteConfig.base_url}${siteConfig.static_url_prefix}${result.url_path}`;
+            const fullUrl = `${siteConfig.base_url}${siteConfig.resource_url_prefix}${result.url_path}`;
             Modal.success({
                 title: 'M3U文件生成成功',
                 content: (

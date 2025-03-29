@@ -1,11 +1,11 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Path
 from database import get_db_connection
 from models import BaseResponse
 from m3u_generator import M3UGenerator
 from models import FilterRule
 import logging
 logger = logging.getLogger(__name__)
-from config import PATH_STATIC_DIR, PATH_DATA_DIR
+from config import RESOURCE_ROOT
 
 router = APIRouter()
 
@@ -214,7 +214,7 @@ def generate_m3u_file():
     m3u_content, filename = generator.generate_m3u(filtered_channels, rule_names=[rule.name for rule in rules])
     
     # 保存到m3u文件夹
-    m3u_dir = PATH_DATA_DIR / 'm3u'
+    m3u_dir = Path(RESOURCE_ROOT) / 'm3u'
     # 确保静态文件目录存在
     if not m3u_dir.exists():
         m3u_dir.mkdir(parents=True)

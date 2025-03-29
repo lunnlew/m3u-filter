@@ -12,7 +12,7 @@ const FilterRuleList: React.FC<FilterRuleListProps> = () => {
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [editingRule, setEditingRule] = useState<FilterRule | null>(null);
   const { data: rules = [], isLoading } = useFilterRules();
-  const { data: siteConfig = { base_url: '', static_url_prefix: '' } } = useSiteConfig();
+  const { data: siteConfig = { base_url: '', resource_url_prefix: '' } } = useSiteConfig();
   const { mutateAsync: deleteRuleMutate } = useFilterRuleDelete();
   const { mutateAsync: toggleRuleMutate } = useFilterRuleToggle();
   const filterRuleMutation = useFilterRuleMutation();
@@ -138,7 +138,7 @@ const FilterRuleList: React.FC<FilterRuleListProps> = () => {
   const handleGenerateM3U = async () => {
     try {
       const { data: result } = await generateM3U([]);
-      const fullUrl = `${siteConfig.base_url}${siteConfig.static_url_prefix}${result.url_path}`;
+      const fullUrl = `${siteConfig.base_url}${siteConfig.resource_url_prefix}${result.url_path}`;
       Modal.success({
         title: 'M3U文件生成成功',
         content: (

@@ -10,7 +10,7 @@ export const ChannelLogoList: React.FC = () => {
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [editingLogo, setEditingLogo] = useState<ChannelLogo | null>(null);
   const [form] = Form.useForm();
-  const { data: siteConfig = { base_url: '', static_url_prefix: '' } } = useSiteConfig();
+  const { data: siteConfig = { base_url: '', resource_url_prefix: '' } } = useSiteConfig();
 
   // 处理logo URL
   const getLogoUrl = (url: string) => {
@@ -18,7 +18,7 @@ export const ChannelLogoList: React.FC = () => {
       return url;
     }
     // 处理相对路径
-    return `${siteConfig.base_url}${siteConfig.static_url_prefix}${url}`;
+    return `${siteConfig.base_url}${siteConfig.resource_url_prefix}${url}`;
   };
 
   // 使用封装的hooks获取数据

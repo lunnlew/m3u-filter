@@ -22,7 +22,7 @@ export const EPGChannelList: React.FC = () => {
   const [isExporting, setIsExporting] = useState(false);
 
   const { data: channels, isLoading } = useEPGChannels();
-  const { data: siteConfig = { base_url: '', static_url_prefix: '' } } = useSiteConfig();
+  const { data: siteConfig = { base_url: '', resource_url_prefix: '' } } = useSiteConfig();
   const { mutateAsync: generateEPG } = useGenerateEPG();
 
   const getLogoUrl = (url: string) => {
@@ -30,7 +30,7 @@ export const EPGChannelList: React.FC = () => {
     if (url.startsWith('http://') || url.startsWith('https://')) {
       return url;
     }
-    return `${siteConfig.base_url}${siteConfig.static_url_prefix}${url}`;
+    return `${siteConfig.base_url}${siteConfig.resource_url_prefix}${url}`;
   };
   const channelMutation = useEPGChannelMutation();
   const deleteMutation = useEPGChannelDelete();
@@ -80,7 +80,7 @@ export const EPGChannelList: React.FC = () => {
     try {
       setIsExporting(true);
       const result = await generateEPG();
-      const fullUrl = `${siteConfig.base_url}${siteConfig.static_url_prefix}${result.url_path}`;
+      const fullUrl = `${siteConfig.base_url}${siteConfig.resource_url_prefix}${result.url_path}`;
       Modal.success({
         title: 'EPG文件生成成功',
         content: (

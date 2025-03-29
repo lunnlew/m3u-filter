@@ -1,5 +1,5 @@
 from typing import List, Dict
-from config import BASE_URL, STATIC_URL_PREFIX
+from config import BASE_URL, RESOURCE_URL_PREFIX
 
 
 class M3UGenerator:
@@ -162,7 +162,7 @@ class M3UGenerator:
         grouped_channels = self._group_channels(filtered_channels)
         
         # 初始化M3U文件内容
-        lines = [f'#EXTM3U x-tvg-url="{BASE_URL}{STATIC_URL_PREFIX}/m3u/epg.xml"']
+        lines = [f'#EXTM3U x-tvg-url="{BASE_URL}{RESOURCE_URL_PREFIX}/m3u/epg.xml"']
         
         # 添加header_info
         if 'generated_at' in header_info:
@@ -182,7 +182,7 @@ class M3UGenerator:
             if channel.get('x_tvg_url'):
                 extinf += f' tvg-url="{channel["x_tvg_url"]}"'
             if channel.get('logo_url'):
-                extinf += f' tvg-logo="{BASE_URL}{STATIC_URL_PREFIX}{channel["logo_url"]}"'
+                extinf += f' tvg-logo="{BASE_URL}{RESOURCE_URL_PREFIX}{channel["logo_url"]}"'
             if channel.get('display_name'):
                 extinf += f' tvg-name="{channel["display_name"]}"'
             if channel.get('catchup'):
