@@ -1,32 +1,32 @@
-# 构建前端
+# 构建前端 - 使用更小的基础镜像
 FROM --platform=$BUILDPLATFORM node:20-alpine AS frontend-builder
 WORKDIR /app
 COPY frontend/package.json frontend/pnpm-lock.yaml ./
 RUN corepack enable && pnpm install --no-frozen-lockfile --force
 COPY frontend .
-RUN pnpm run build
+RUN pnpm run build && \
+    rm -rf node_modules
 
-# 构建后端
-FROM --platform=$BUILDPLATFORM python:3.11-slim AS builder
+# 构建后端 - 使用多阶段构建
+FROM --platform=$BUILDPLATFORM python:3.11-alpine AS builder
 WORKDIR /app
 
-# 安装构建依赖
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    ffmpeg \
-    && rm -rf /var/lib/apt/lists/*
+# 安装最小化构建依赖
+RUN apk add --no-cache \
+    build-base \
+    ffmpeg
 
 # 安装Python依赖
 COPY backend/requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt && \
-    pip install --no-cache-dir pyinstaller
+RUN pip install --no-cache-dir -r requirements.txt pyinstaller
 
 # 复制后端代码并构建
 COPY backend .
-RUN pyinstaller --noconfirm --clean pyinstaller.spec
+RUN pyinstaller --noconfirm --clean pyinstaller.spec && \
+    rm -rf /root/.cache/pip
 
-# 最终镜像
-FROM --platform=$BUILDPLATFORM python:3.11-slim
+# 最终镜像 - 使用更小的基础镜像
+FROM --platform=$BUILDPLATFORM python:3.11-alpine
 WORKDIR /app
 
 # 仅复制必要的运行时文件

@@ -61,30 +61,14 @@ async def get_resource_file(file_path: str):
     
     return FileResponse(file_location, **kwargs)
 
-@router.get("/static/{file_path:path}")
-async def get_static_file(file_path: str):
-    """获取前端资源文件"""
-    # Decode URL-encoded file path
-    decoded_path = unquote(file_path)
-    file_location = PATH_WEB_ROOT / 'static' / decoded_path
-
-    if not file_location.exists():
-        raise HTTPException(status_code=404, detail="前端文件不存在")
-
-    # 安全校验指向web子目录
-    try:
-        file_location.relative_to(PATH_WEB_ROOT)
-    except ValueError:
-        raise HTTPException(status_code=403, detail="前端资源访问被拒绝")
-
-    return FileResponse(file_location)
-
 @router.get("{file_path:path}")
 async def get_web_file(file_path: str):
     """获取前端资源文件"""
     # Decode URL-encoded file path
     decoded_path = unquote(file_path)
     file_location = PATH_WEB_ROOT / decoded_path
+
+    print(file_location)
 
     if not file_location.exists():
         raise HTTPException(status_code=404, detail="前端文件不存在")
