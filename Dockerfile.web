@@ -25,19 +25,13 @@ RUN pip install --no-cache-dir -r requirements.txt && \
 COPY backend .
 RUN pyinstaller --noconfirm --clean pyinstaller.spec
 
-# 使用官方FFmpeg镜像作为基础
-FROM --platform=$BUILDPLATFORM jrottenberg/ffmpeg:4.1-alpine AS ffmpeg-base
-
 # 最终镜像
-FROM --platform=$BUILDPLATFORM python:3.11-slim
+FROM --platform=$BUILDPLATFORM jrottenberg/ffmpeg:4.1-alpine
 WORKDIR /app
 
 # 仅复制必要的运行时文件
 COPY --from=builder /app/dist/m3u_filter_backend /app/m3u-filter
 COPY --from=frontend-builder /app/dist ./data/web
-# 从FFmpeg镜像复制二进制文件
-COPY --from=ffmpeg-base /usr/local/bin/ffmpeg /usr/local/bin/
-COPY --from=ffmpeg-base /usr/local/bin/ffprobe /usr/local/bin/
 
 # 设置环境变量
 ENV PYTHONUNBUFFERED=1 \
