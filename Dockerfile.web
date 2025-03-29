@@ -30,7 +30,7 @@ FROM --platform=$BUILDPLATFORM python:3.11-slim
 WORKDIR /app
 
 # 仅复制必要的运行时文件
-COPY --from=builder /app/dist/m3u-filter /app/m3u-filter
+COPY --from=builder /app/dist/m3u_filter_backend /app/m3u-filter
 COPY --from=frontend-builder /app/dist ./web
 
 # 设置环境变量
