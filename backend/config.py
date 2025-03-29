@@ -8,7 +8,7 @@ LOGO_URL_WHITELIST = [
 ]
 
 # 站点基础URL配置
-BASE_URL = "http://localhost:3232"  # 开发环境默认值
+BASE_URL = os.getenv('M3U_FILTER_DOMAIN_URL', "http://localhost:3232" ) # 开发环境默认值
 RESOURCE_URL_PREFIX = "/resource"  # 资源文件前缀
 
 RESOURCE_DIR = '/resource'

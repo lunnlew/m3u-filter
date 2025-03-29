@@ -41,7 +41,8 @@ COPY --from=frontend-builder /app/dist ./web
 ENV PYTHONUNBUFFERED=1 \
     TZ=Asia/Shanghai \
     M3U_FILTER_DATA_ROOT=/app/data \
-    M3U_FILTER_WEB_ROOT=/app/web
+    M3U_FILTER_WEB_ROOT=/app/web \
+    M3U_FILTER_DOMAIN_URL=http://localhost:3232
 
 VOLUME /app/data
 EXPOSE 3232
