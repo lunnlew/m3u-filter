@@ -1,31 +1,45 @@
 # 构建前端
 FROM --platform=$BUILDPLATFORM node:20-alpine AS frontend-builder
 WORKDIR /app
+COPY frontend/package.json frontend/pnpm-lock.yaml ./
+RUN corepack enable && pnpm install --frozen-lockfile
 COPY frontend .
-RUN corepack enable && pnpm install && pnpm run build
+RUN pnpm run build
 
 # 构建后端
-FROM --platform=$BUILDPLATFORM python:3.11-slim
+FROM --platform=$BUILDPLATFORM python:3.11-slim AS builder
 WORKDIR /app
 
-# 复制后端代码
-COPY backend/requirements.txt .
-RUN apt-get update && apt-get install -y ffmpeg
-RUN pip install --no-cache-dir -r requirements.txt
+# 安装构建依赖
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
 
-# 复制前后端构建结果
+# 安装Python依赖
+COPY backend/requirements.txt .
+RUN pip install --user --no-cache-dir -r requirements.txt
+
+# 最终镜像
+FROM python:3.11-slim
+WORKDIR /app
+
+# 从builder阶段复制已安装的Python包
+COPY --from=builder /root/.local /root/.local
+# 确保脚本能找到已安装的包
+ENV PATH=/root/.local/bin:$PATH
+
+# 复制后端代码
 COPY backend .
+# 复制前端构建结果
 COPY --from=frontend-builder /app/dist ./static
 
 # 设置环境变量
-ENV PYTHONUNBUFFERED=1
-ENV TZ=Asia/Shanghai
-ENV M3U_FILTER_DATA_ROOT=/app/data
+ENV PYTHONUNBUFFERED=1 \
+    TZ=Asia/Shanghai \
+    M3U_FILTER_DATA_ROOT=/app/data
 
 VOLUME /app/data
-
-# 暴露端口
 EXPOSE 3232
 
-# 启动命令
 CMD ["uvicorn", "app:create_app", "--host", "0.0.0.0", "--port", "3232", "--factory"]
