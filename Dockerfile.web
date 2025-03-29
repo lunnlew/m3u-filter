@@ -48,5 +48,5 @@ ENV PYTHONUNBUFFERED=1 \
 VOLUME /app/data
 EXPOSE 3232
 
-# 直接运行二进制文件（修正格式）
-ENTRYPOINT ["/app/m3u-filter"]
+# 直接运行二进制文件
+CMD ["/app/m3u-filter"]
