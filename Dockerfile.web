@@ -40,7 +40,8 @@ COPY --from=frontend-builder /app/dist ./web
 # 设置环境变量g
 ENV PYTHONUNBUFFERED=1 \
     TZ=Asia/Shanghai \
-    M3U_FILTER_DATA_ROOT=/app/data
+    M3U_FILTER_DATA_ROOT=/app/data \
+    M3U_FILTER_WEB_ROOT=/app/web
 
 VOLUME /app/data
 EXPOSE 3232

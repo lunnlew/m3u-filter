@@ -15,16 +15,12 @@ RESOURCE_DIR = '/resource'
 LOG_DIR = '/logs'
 LOGOS_DIR = '/logos'
 APP_HOME = os.getenv('M3U_FILTER_DATA_ROOT', os.path.expanduser('~') + '/.m3u-filter')
-DATA_ROOT = os.getenv('M3U_FILTER_WEB_ROOT', APP_HOME + '/data')
 WEB_ROOT= os.getenv('M3U_FILTER_WEB_ROOT', APP_HOME + '/web')
-RESOURCE_ROOT= os.getenv('M3U_FILTER_RESOURCE_ROOT', DATA_ROOT + RESOURCE_DIR)
-LOG_ROOT= os.getenv('M3U_FILTER_LOGS_ROOT', DATA_ROOT + LOG_DIR)
+RESOURCE_ROOT= os.getenv('M3U_FILTER_RESOURCE_ROOT', APP_HOME + RESOURCE_DIR)
+LOG_ROOT= os.getenv('M3U_FILTER_LOGS_ROOT', APP_HOME + LOG_DIR)
 LOGOS_ROOT= os.getenv('M3U_FILTER_LOGOS_ROOT', RESOURCE_ROOT + LOGOS_DIR)
-DATABASE_FILE = DATA_ROOT + '/epg.db'
+DATABASE_FILE = APP_HOME + '/epg.db'
 
-PATH_DATA_ROOT = Path(DATA_ROOT)
-if not PATH_DATA_ROOT.exists():
-    PATH_DATA_ROOT.mkdir(parents=True)
 
 PATH_WEB_ROOT = Path(WEB_ROOT)
 if not PATH_WEB_ROOT.exists():
