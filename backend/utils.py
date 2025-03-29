@@ -1,11 +1,12 @@
 import os
 from typing import Optional
 import aiohttp
+from pathlib import Path
 import aiofiles
 import uuid
 import re
 from urllib.parse import urlparse
-from config import LOGO_URL_WHITELIST, DATA_ROOT, STATIC_DIR, LOGO_STATIC_DIR, DATA_DIR
+from config import LOGO_URL_WHITELIST, LOGOS_DIR, LOGOS_ROOT
 from database import get_db_connection
 import logging
 logger = logging.getLogger(__name__)
@@ -38,8 +39,9 @@ async def download_and_save_logo(logo_url: str, channel_name: Optional[str] = No
         str: 保存后的相对路径
     """
     # 确保目录存在
-    logo_dir = os.path.join(DATA_ROOT, DATA_DIR, LOGO_STATIC_DIR)
-    os.makedirs(logo_dir, exist_ok=True)
+    PATH_LOGOS_ROOT = Path(LOGOS_ROOT)
+    if not PATH_LOGOS_ROOT.exists():
+        PATH_LOGOS_ROOT.mkdir(parents=True)
     
     # 获取文件扩展名
     parsed_url = urlparse(logo_url)
@@ -85,8 +87,10 @@ async def download_and_save_logo(logo_url: str, channel_name: Optional[str] = No
                 content = await response.read()
                 
                 # 检查是否存在同名文件
-                save_path = os.path.join(logo_dir, filename)
-                relative_path = f"/{LOGO_STATIC_DIR}/{filename}"
+                save_path = os.path.join(PATH_LOGOS_ROOT, filename)
+                relative_path = LOGOS_DIR + f"/{filename}"
+                
+                # f"/{LOGO_STATIC_DIR}/{filename}"
                 
                 if os.path.exists(save_path):
                     # 比较文件大小
@@ -101,10 +105,10 @@ async def download_and_save_logo(logo_url: str, channel_name: Optional[str] = No
                         import hashlib
                         # 使用logo_url的MD5哈希值前8位作为子目录名
                         unique_id = hashlib.md5(logo_url.encode()).hexdigest()[:8]
-                        sub_dir = os.path.join(logo_dir, unique_id)
+                        sub_dir = os.path.join(LOGOS_ROOT, unique_id)
                         os.makedirs(sub_dir, exist_ok=True)
                         save_path = os.path.join(sub_dir, filename)
-                        relative_path = f"/{LOGO_STATIC_DIR}/{unique_id}/{filename}"
+                        relative_path = f"{LOGOS_DIR}/{unique_id}/{filename}"
                 
                 # 保存文件
                 async with aiofiles.open(save_path, 'wb') as f:
