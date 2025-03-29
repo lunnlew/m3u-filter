@@ -20,7 +20,7 @@ COPY --from=frontend-builder /app/dist ./static
 # 设置环境变量
 ENV PYTHONUNBUFFERED=1
 ENV TZ=Asia/Shanghai
-ENV DATA_ROOT=/app/data
+ENV M3U_FILTER_DATA_ROOT=/app/data
 
 VOLUME /app/data
 

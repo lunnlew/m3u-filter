@@ -7,7 +7,7 @@ LOGO_URL_WHITELIST = [
     "https://i.imgur.com"
 ]
 
-DATA_ROOT = os.path.expanduser('~') + '/.m3u-filter'
+DATA_ROOT = os.getenv('M3U_FILTER_DATA_ROOT', os.path.expanduser('~') + '/.m3u-filter')
 STATIC_DIR = "static"
 DATA_DIR = "data"
 LOGO_STATIC_DIR = "logos"
