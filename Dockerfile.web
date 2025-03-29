@@ -4,34 +4,40 @@ WORKDIR /app
 COPY frontend/package.json frontend/pnpm-lock.yaml ./
 RUN corepack enable && pnpm install --no-frozen-lockfile --force
 COPY frontend .
-RUN pnpm run build
+RUN pnpm run build && \
+    rm -rf node_modules
 
 # 构建后端
-FROM --platform=$BUILDPLATFORM python:3.11-slim AS builder
+FROM --platform=$BUILDPLATFORM python:3.11-alpine AS builder
 WORKDIR /app
 
 # 安装构建依赖
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    && rm -rf /var/lib/apt/lists/*
+RUN apk add --no-cache \
+    build-base \
+    python3-dev \
+    musl-dev \
+    zlib-dev
 
 # 安装Python依赖
 COPY backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt && \
-    pip install --no-cache-dir pyinstaller
+    pip install --no-cache-dir pyinstaller && \
+    rm -rf /root/.cache
 
 # 复制后端代码并构建
 COPY backend .
-RUN pyinstaller --noconfirm --clean pyinstaller.spec
+RUN pyinstaller --noconfirm --clean --strip pyinstaller.spec
 
 # 最终镜像
-FROM --platform=$BUILDPLATFORM python:3.11-slim
+FROM --platform=$BUILDPLATFORM alpine:3.19
 WORKDIR /app
 
-# 安装依赖
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# 安装运行时依赖
+RUN apk add --no-cache \
     ffmpeg \
-    && rm -rf /var/lib/apt/lists/*
+    python3 \
+    tzdata && \
+    ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime
 
 # 仅复制必要的运行时文件
 COPY --from=builder /app/dist/m3u_filter_backend /app/m3u-filter
