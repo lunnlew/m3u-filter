@@ -18,20 +18,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # 安装Python依赖
 COPY backend/requirements.txt .
-RUN pip install --user --no-cache-dir -r requirements.txt pyinstaller
+RUN pip install --no-cache-dir -r requirements.txt && \
+    pip install --no-cache-dir pyinstaller
 
 # 复制后端代码并构建
 COPY backend .
-RUN pyinstaller --onefile --name m3u-filter \
-    --add-data "models:models" \
-    --add-data "routers:routers" \
-    --add-data "scheduler:scheduler" \
-    --add-data "sync:sync" \
-    --hidden-import "uvicorn.logging" \
-    --hidden-import "uvicorn.loops" \
-    --hidden-import "uvicorn.protocols" \
-    --hidden-import "uvicorn.lifespan" \
-    main.py
+RUN pyinstaller --noconfirm --clean pyinstaller.spec
 
 # 最终镜像
 FROM --platform=$BUILDPLATFORM python:3.11-slim
