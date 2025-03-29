@@ -45,7 +45,8 @@ ENV PYTHONUNBUFFERED=1 \
     M3U_FILTER_DATA_ROOT=/app/data \
     M3U_FILTER_WEB_ROOT=/app/data/web \
     M3U_FILTER_RESOURCE_ROOT=/app/data/resource \
-    M3U_FILTER_LOGS_ROOT=/app/data/logs
+    M3U_FILTER_LOGS_ROOT=/app/data/logs \
+    M3U_FILTER_LOGOS_ROOT=/app/data/logos
 
 VOLUME /app/data
 EXPOSE 3232
