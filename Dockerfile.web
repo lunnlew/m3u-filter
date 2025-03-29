@@ -29,6 +29,9 @@ RUN pyinstaller --noconfirm --clean pyinstaller.spec
 FROM --platform=$BUILDPLATFORM python:3.11-slim
 WORKDIR /app
 
+# 创建必要的目录结构
+RUN mkdir -p /app/data/{logs,web,resource}
+
 # 仅复制必要的运行时文件
 COPY --from=builder /app/dist/m3u_filter_backend /app/m3u-filter
 COPY --from=frontend-builder /app/dist ./web

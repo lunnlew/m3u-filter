@@ -1,18 +1,17 @@
-from fastapi import FastAPI, Path
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from routers import api_router
 from scheduler import start_scheduler
 from database import init_db
-from config import LOG_ROOT, LOG_FILE, LOG_LEVEL
+from config import PATH_LOG_ROOT, LOG_FILE, LOG_LEVEL
 import logging
 import logging.handlers
 import os
 
 # 配置日志
 def setup_logger():
-    log_dir = Path(LOG_ROOT)
-    if not os.path.exists(log_dir):
-        os.makedirs(log_dir)
+    if not os.path.exists(PATH_LOG_ROOT):
+        os.makedirs(PATH_LOG_ROOT)
     
     logger = logging.getLogger()
     logger.setLevel(LOG_LEVEL)
@@ -25,7 +24,7 @@ def setup_logger():
     
     # 文件处理器（按天轮转）
     file_handler = logging.handlers.TimedRotatingFileHandler(
-        filename=os.path.join(log_dir, LOG_FILE),
+        filename=PATH_LOG_ROOT / LOG_FILE,
         when='midnight',
         interval=1,
         backupCount=30,

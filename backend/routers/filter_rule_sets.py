@@ -1,4 +1,5 @@
-from fastapi import APIRouter, HTTPException, Path
+from fastapi import APIRouter, HTTPException
+from pathlib import Path
 from typing import List, Optional
 from database import get_db_connection
 from models import FilterRuleSet, FilterRuleSetMapping, RuleTree

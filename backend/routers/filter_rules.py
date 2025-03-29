@@ -1,4 +1,5 @@
-from fastapi import APIRouter, HTTPException, Path
+from fastapi import APIRouter
+from pathlib import Path
 from database import get_db_connection
 from models import BaseResponse
 from m3u_generator import M3UGenerator

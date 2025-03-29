@@ -4,7 +4,7 @@ import os
 import mimetypes
 import logging
 from urllib.parse import unquote
-from config import RESOURCE_ROOT, WEB_ROOT
+from config import PATH_RESOURCE_ROOT, PATH_WEB_ROOT
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -26,7 +26,7 @@ async def serve_web():
 async def get_static_file(file_path: str):
     """获取其他静态文件"""
     decoded_path = unquote(file_path)
-    file_location = Path(RESOURCE_ROOT) / decoded_path
+    file_location = PATH_RESOURCE_ROOT / decoded_path
     
     if not file_location.exists():
         raise HTTPException(status_code=404, detail="文件不存在")
@@ -36,7 +36,7 @@ async def get_static_file(file_path: str):
         
     # 检查文件是否在resource目录下（防止目录遍历攻击）
     try:
-        file_location.relative_to(RESOURCE_ROOT)
+        file_location.relative_to(PATH_RESOURCE_ROOT)
     except ValueError:
         raise HTTPException(status_code=403, detail="访问被拒绝")
     
@@ -66,14 +66,14 @@ async def get_web_file(file_path: str):
     """获取前端资源文件"""
     # Decode URL-encoded file path
     decoded_path = unquote(file_path)
-    file_location = Path(WEB_ROOT + decoded_path)
+    file_location = PATH_WEB_ROOT / decoded_path
 
     if not file_location.exists():
         raise HTTPException(status_code=404, detail="前端文件不存在")
 
     # 安全校验指向web子目录
     try:
-        file_location.relative_to(WEB_ROOT)
+        file_location.relative_to(PATH_WEB_ROOT)
     except ValueError:
         raise HTTPException(status_code=403, detail="前端资源访问被拒绝")
 
