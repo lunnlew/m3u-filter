@@ -383,16 +383,20 @@ async def sync_stream_source(source_id: int):
                 # 如果有epg地址，则检查是否已存在，不存在才加入epg表
                 if tvg_channel.get('x_tvg_url'):
                     print(f"[同步直播源] 发现EPG地址: {tvg_channel['x_tvg_url']}")
-                    c.execute("SELECT COUNT(*) FROM epg_sources WHERE url = ?", (tvg_channel['x_tvg_url'],))
-                    if c.fetchone()[0] == 0:
-                        print("[同步直播源] 添加新的EPG源")
-                        c.execute(
-                            "INSERT INTO epg_sources (name, url, active, sync_interval, default_language) VALUES (?, ?, ?, ?, ?)",
-                            ('来自直播订阅识别', tvg_channel['x_tvg_url'], True, 6, 'zh')
-                        )
-                        source_id = c.lastrowid
-                        from scheduler import update_source_schedule
-                        update_source_schedule(source_id)
+                    # 处理可能存在的多个EPG地址（以逗号分隔）
+                    epg_urls = [url.strip() for url in tvg_channel['x_tvg_url'].split(',') if url.strip()]
+                    
+                    for epg_url in epg_urls:
+                        c.execute("SELECT COUNT(*) FROM epg_sources WHERE url = ?", (epg_url,))
+                        if c.fetchone()[0] == 0:
+                            print(f"[同步直播源] 添加新的EPG源: {epg_url}")
+                            c.execute(
+                                "INSERT INTO epg_sources (name, url, active, sync_interval, default_language) VALUES (?, ?, ?, ?, ?)",
+                                (f"来自直播订阅{source['name']}", epg_url, True, 6, 'zh')
+                            )
+                            epg_source_id = c.lastrowid
+                            from scheduler import update_source_schedule
+                            update_source_schedule(epg_source_id)
 
                 conn.commit()
                 print("[同步直播源] 数据库更新完成")

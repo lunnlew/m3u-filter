@@ -16,6 +16,8 @@ DISPLAY_EXTENSIONS = {
     '.m3u8': 'text/plain',
     '.txt': 'text/plain',
     '.json': 'application/json',
+    '.xml': 'application/xml',
+    '.html': 'text/html',
 }
 
 @router.get("/")

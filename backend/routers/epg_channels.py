@@ -222,4 +222,4 @@ async def export_epg_xml():
         with open(file_path, "wb") as f:
             f.write(xml_str)
     
-    return BaseResponse.success({"url_path": f"/m3u/{filename}"})
+    return BaseResponse.success({"url_path": f"/m3u/{filename}?v={datetime.now().strftime('%Y%m%d%H%M%S')}"})
