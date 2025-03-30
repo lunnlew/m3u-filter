@@ -6,7 +6,7 @@ import asyncio
 from sync import sync_epg_source, sync_stream_source
 from database import get_db_connection
 from routers.stream_tracks import test_stream_track
-from routers.filter_rule_sets import generate_m3u_file
+from routers.filter_rule_sets import generate_m3u_file, generate_txt_file
 
 import logging
 logger = logging.getLogger(__name__)
@@ -81,6 +81,24 @@ def schedule_sync_stream_sources():
             )
 
 def schedule_generate_m3u_files():
+    """调度生成M3U Txt文件任务"""
+    with get_db_connection() as conn:
+        c = conn.cursor()
+        c.execute("SELECT id, name, sync_interval FROM filter_rule_sets WHERE enabled = 1")
+        rule_sets = c.fetchall()
+        
+        for set_id, name, interval in rule_sets:
+            hours = interval if interval is not None else 6
+            scheduler.add_job(
+                generate_txt_file,
+                trigger=IntervalTrigger(hours=hours),
+                args=[set_id],
+                id=f'generate_m3u_txt_{set_id}',
+                name=f'Generate M3U Txt for Rule Set: {name}',
+                replace_existing=True
+            )
+
+def schedule_generate_txt_files():
     """调度生成M3U文件任务"""
     with get_db_connection() as conn:
         c = conn.cursor()
@@ -98,6 +116,7 @@ def schedule_generate_m3u_files():
                 replace_existing=True
             )
 
+
 def init_scheduler():
     """初始化调度器并添加所有任务"""
     scheduler.remove_all_jobs()
@@ -105,6 +124,7 @@ def init_scheduler():
     schedule_sync_epg_sources()
     schedule_sync_stream_sources()
     schedule_generate_m3u_files()
+    schedule_generate_txt_files()
 
 def start_scheduler():
     """启动调度器"""

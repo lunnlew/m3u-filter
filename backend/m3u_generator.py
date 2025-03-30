@@ -175,20 +175,36 @@ class M3UGenerator:
                 return
                 
             extinf = '#EXTINF:-1'
-            for attr in ['tvg-id', 'tvg-name', 'tvg-logo', 'tvg-language']:
-                if attr in channel:
-                    extinf += f' {attr}="{channel[attr]}"'
             
+            if channel.get('tvg-id'):
+                extinf += f' tvg-id="{channel["tvg-id"]}"'
+            elif channel.get('tvg-name'):
+                extinf += f' tvg-id="{channel["tvg-name"]}"'
+            elif channel.get('display_name'):
+                extinf += f' tvg-id="{channel["display_name"]}"'
+
+            if channel.get('tvg-name'):
+                extinf += f' tvg-name="{channel["tvg-name"]}"'
+            elif channel.get('display_name'):
+                extinf += f' tvg-name="{channel["display_name"]}"'
+
             if channel.get('x_tvg_url'):
                 extinf += f' tvg-url="{channel["x_tvg_url"]}"'
+
             if channel.get('logo_url'):
                 extinf += f' tvg-logo="{BASE_URL}{RESOURCE_URL_PREFIX}{channel["logo_url"]}"'
-            if channel.get('display_name'):
-                extinf += f' tvg-name="{channel["display_name"]}"'
+            elif channel.get('tvg-logo'):
+                extinf += f' tvg-logo="{channel["tvg-logo"]}"'
+            
+            if channel.get('tvg-language'):
+                extinf += f' tvg-language="{channel["tvg-language"]}"'
+            
             if channel.get('catchup'):
                 extinf += f' catchup="{channel["catchup"]}"'
+
             if channel.get('catchup_source'):
                 extinf += f' catchup-source="{channel["catchup_source"]}"'
+
             if channel.get('group_title'):
                 extinf += f' group-title="{channel["group_title"]}"'
             
