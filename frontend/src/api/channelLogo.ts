@@ -1,10 +1,16 @@
 import { request } from '../utils/request';
 import type { ChannelLogo } from '../types/channel';
 
-export const fetchChannelLogos = async (): Promise<ChannelLogo[]> => {
+export interface ChannelLogoFilters {
+  channel_name?: string;
+  priority?: number;
+}
+
+export const fetchChannelLogos = async (filters?: ChannelLogoFilters): Promise<ChannelLogo[]> => {
   const response = await request<ChannelLogo[]>({
     method: 'get',
-    url: '/default-channel-logos'
+    url: '/default-channel-logos',
+    params: filters
   });
   return response.data;
 };

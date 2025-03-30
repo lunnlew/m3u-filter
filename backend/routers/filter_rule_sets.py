@@ -25,12 +25,39 @@ class FilterRuleSetResponse(BaseModel):
     children: Optional[List[dict]] = None
     sync_interval: Optional[int] = None  # 新增字段，单位：分钟
 
+from typing import List, Optional, Union, Literal
+
 @router.get("/filter-rule-sets")
-def get_filter_rule_sets():
-    """获取所有规则集合"""
+def get_filter_rule_sets(
+    name: Optional[str] = None,
+    enabled: Optional[bool] = None,
+    logic_type: Optional[str] = None
+):
+    """获取所有规则集合，支持筛选"""
     with get_db_connection() as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT id, name, description, enabled, logic_type, sync_interval FROM filter_rule_sets")
+        
+        # 构建查询条件
+        query = "SELECT id, name, description, enabled, logic_type, sync_interval FROM filter_rule_sets"
+        conditions = []
+        params = []
+        
+        if name:
+            conditions.append("name LIKE ?")
+            params.append(f"%{name}%")
+        
+        if enabled is not None:
+            conditions.append("enabled = ?")
+            params.append(1 if enabled else 0)
+        
+        if logic_type:
+            conditions.append("logic_type = ?")
+            params.append(logic_type)
+        
+        if conditions:
+            query += " WHERE " + " AND ".join(conditions)
+        
+        cursor.execute(query, params)
         columns = [column[0] for column in cursor.description]
         rule_sets = [dict(zip(columns, row)) for row in cursor.fetchall()]
         data = []

@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
-import { Table, Button, Switch, Space, Modal, App } from 'antd';
+import React, { useState, useMemo } from 'react';
+import { Table, Button, Switch, Space, Modal, App, Input, Select, Row, Col } from 'antd';
+import { SearchOutlined } from '@ant-design/icons';
 import { FilterRuleForm } from './FilterRuleForm';
 import type { FilterRule } from '../types/filter';
 import { useFilterRules, useFilterRuleMutation, useFilterRuleDelete, useFilterRuleToggle, useApplyFilterRules, useGenerateM3U } from '../hooks/filterRules';
@@ -11,7 +12,12 @@ const FilterRuleList: React.FC<FilterRuleListProps> = () => {
   const { message } = App.useApp();
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [editingRule, setEditingRule] = useState<FilterRule | null>(null);
-  const { data: rules = [], isLoading } = useFilterRules();
+  const [searchKeyword, setSearchKeyword] = useState('');
+  const [selectedType, setSelectedType] = useState<string>('');
+  const { data: rules = [], isLoading } = useFilterRules({
+    keyword: searchKeyword || undefined,
+    type: selectedType || undefined
+  });
   const { data: siteConfig = { base_url: '', resource_url_prefix: '' } } = useSiteConfig();
   const { mutateAsync: deleteRuleMutate } = useFilterRuleDelete();
   const { mutateAsync: toggleRuleMutate } = useFilterRuleToggle();
@@ -46,6 +52,34 @@ const FilterRuleList: React.FC<FilterRuleListProps> = () => {
       message.error('删除失败');
     }
   };
+
+  // 规则类型选项
+  const typeOptions = [
+    { value: '', label: '全部类型' },
+    { value: 'name', label: '名称匹配' },
+    { value: 'keyword', label: '关键词匹配' },
+    { value: 'resolution', label: '分辨率匹配' },
+    { value: 'group', label: '分组匹配' },
+    { value: 'source_name', label: '来源名称匹配' },
+    { value: 'bitrate', label: '码率匹配' }
+  ];
+
+  // 根据搜索关键词和选中类型过滤规则
+  const filteredRules = useMemo(() => {
+    return rules.filter(rule => {
+      // 类型筛选
+      const typeMatch = selectedType ? rule.type === selectedType : true;
+
+      // 关键词搜索 (匹配规则名称和匹配模式)
+      const keyword = searchKeyword.toLowerCase();
+      const keywordMatch = keyword
+        ? rule.name.toLowerCase().includes(keyword) ||
+        rule.pattern.toLowerCase().includes(keyword)
+        : true;
+
+      return typeMatch && keywordMatch;
+    });
+  }, [rules, searchKeyword, selectedType]);
 
   const columns = [
     {
@@ -155,21 +189,33 @@ const FilterRuleList: React.FC<FilterRuleListProps> = () => {
 
   return (
     <div style={{ padding: '20px' }}>
-      <div style={{ marginBottom: 16 }}>
-        <Space>
-          <Button type="primary" onClick={() => {
-            setEditingRule(null);
-            setIsModalVisible(true);
-          }}>新建规则</Button>
-          {/* <Button onClick={handleApplyRules}>应用规则</Button>
-          <Button onClick={handleGenerateM3U}>生成M3U</Button> */}
-        </Space>
-      </div>
-
+      <Space style={{ marginBottom: 16 }}>
+        <Input
+          placeholder="搜索规则名称或匹配模式"
+          value={searchKeyword}
+          onChange={e => setSearchKeyword(e.target.value)}
+          prefix={<SearchOutlined />}
+          allowClear
+        />
+        <Select
+          placeholder="选择规则类型"
+          style={{ width: '100%' }}
+          value={selectedType}
+          onChange={value => setSelectedType(value)}
+          options={typeOptions}
+          allowClear
+        />
+        <Button type="primary" onClick={() => {
+          setEditingRule(null);
+          setIsModalVisible(true);
+        }}>新建规则</Button>
+        {/* <Button onClick={handleApplyRules}>应用规则</Button>
+              <Button onClick={handleGenerateM3U}>生成M3U</Button> */}
+      </Space>
       <Table
         loading={isLoading}
         columns={columns}
-        dataSource={rules}
+        dataSource={filteredRules}
         rowKey="id"
       />
 

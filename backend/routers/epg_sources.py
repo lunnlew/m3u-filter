@@ -12,10 +12,25 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 @router.get("/epg-sources")
-async def get_epg_sources():
+async def get_epg_sources(name: str = None, url: str = None, active: bool = None):
     with get_db_connection() as conn:
         c = conn.cursor()
-        c.execute("SELECT * FROM epg_sources")
+        query = "SELECT * FROM epg_sources WHERE 1=1"
+        params = []
+        
+        if name is not None:
+            query += " AND name LIKE ?"
+            params.append(f"%{name}%")
+            
+        if url is not None:
+            query += " AND url LIKE ?"
+            params.append(f"%{url}%")
+            
+        if active is not None:
+            query += " AND active = ?"
+            params.append(active)
+            
+        c.execute(query, params)
         columns = [description[0] for description in c.description]
         sources = [dict(zip(columns, row)) for row in c.fetchall()]
         return BaseResponse.success(data=sources)

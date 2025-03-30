@@ -3,10 +3,10 @@ import { fetchEPGSources, createOrUpdateEPGSource, deleteEPGSource, syncEPGSourc
 import type { EPGSource } from '../types/epg';
 import { ApiResponse } from '@/types/api';
 
-export const useEPGSources = () => {
+export const useEPGSources = (filter?: Record<string, unknown>) => {
   return useQuery<EPGSource[]>({
-    queryKey: ['epg-sources'],
-    queryFn: fetchEPGSources,
+    queryKey: ['epg-sources', filter],
+    queryFn: () => fetchEPGSources(filter),
   });
 };
 

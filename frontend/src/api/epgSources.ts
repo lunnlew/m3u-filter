@@ -2,10 +2,11 @@ import { request } from '../utils/request';
 import type { EPGSource } from '../types/epg';
 import { ApiResponse } from '@/types/api';
 
-export const fetchEPGSources = async (): Promise<EPGSource[]> => {
+export const fetchEPGSources = async (params?: Record<string, unknown>): Promise<EPGSource[]> => {
   const response = await request<EPGSource[]>({
     method: 'get',
-    url: '/epg-sources'
+    url: '/epg-sources',
+    params
   });
   return response.data;
 };

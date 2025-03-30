@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Table, DatePicker, Input, Space, Button, Modal, App } from 'antd';
 import type { TableProps } from 'antd';
+import { ReloadOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useClearAllData, useEPGPrograms, useEPGSync } from '../hooks/epgPrograms';
 
@@ -29,11 +30,18 @@ const EPGPrograms = () => {
     pageSize: 10,
   });
 
+  // 重置筛选条件
+  const handleReset = () => {
+    setChannel('');
+    setTimeRange([null, null]);
+    setPagination(prev => ({ ...prev, current: 1 }));
+  };
+
   const params = {
     page: pagination.current,
     page_size: pagination.pageSize,
     ...(channel ? { channel_name: channel } : {}),
-    ...(timeRange[0] && timeRange[1] ? {
+    ...(timeRange && timeRange[0] && timeRange[1] ? {
       start_time: timeRange[0].format('YYYYMMDDHHmmss'),
       end_time: timeRange[1].format('YYYYMMDDHHmmss')
     } : {})
@@ -122,8 +130,11 @@ const EPGPrograms = () => {
           value={timeRange}
           onChange={(dates) => setTimeRange(dates as [dayjs.Dayjs | null, dayjs.Dayjs | null])}
         />
-        <Button type="primary" onClick={() => setPagination(prev => ({ ...prev, current: 1 }))}>
-          查询
+        <Button
+          icon={<ReloadOutlined />}
+          onClick={handleReset}
+        >
+          重置筛选
         </Button>
         <Button onClick={handleSync} loading={syncMutation.isPending}>同步EPG订阅数据</Button>
         <Button

@@ -12,10 +12,16 @@ import {
 } from '../api/filterRuleSets';
 import type { FilterRuleSet } from '../types/filter';
 
-export const useFilterRuleSets = () => {
+interface FilterParams {
+  name?: string;
+  enabled?: boolean;
+  logic_type?: string;
+}
+
+export const useFilterRuleSets = (params?: FilterParams) => {
   return useQuery<FilterRuleSet[]>({
-    queryKey: ['filter-rule-sets'],
-    queryFn: fetchFilterRuleSets,
+    queryKey: ['filter-rule-sets', params],
+    queryFn: () => fetchFilterRuleSets(params),
   });
 };
 

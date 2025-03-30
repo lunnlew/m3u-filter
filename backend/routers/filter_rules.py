@@ -28,11 +28,31 @@ def _row_to_filter_rule(row) -> FilterRule:
     )
 
 @router.get("/filter-rules")
-def get_filter_rules():
-    """获取所有过滤规则"""
+def get_filter_rules(keyword: str = None, rule_type: str = None):
+    """获取过滤规则，支持关键词搜索和类型筛选"""
     with get_db_connection() as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT * FROM filter_rules")
+        query = "SELECT * FROM filter_rules"
+        params = []
+        
+        # 构建WHERE子句
+        where_clauses = []
+        
+        # 关键词搜索（匹配名称和模式）
+        if keyword:
+            where_clauses.append("(name LIKE ? OR pattern LIKE ?)")
+            params.extend([f'%{keyword}%', f'%{keyword}%'])
+        
+        # 类型筛选
+        if rule_type:
+            where_clauses.append("type = ?")
+            params.append(rule_type)
+        
+        # 添加WHERE子句到查询
+        if where_clauses:
+            query += " WHERE " + " AND ".join(where_clauses)
+        
+        cursor.execute(query, params)
         rules = cursor.fetchall()
         return BaseResponse.success(data=[_row_to_filter_rule(rule) for rule in rules])
 

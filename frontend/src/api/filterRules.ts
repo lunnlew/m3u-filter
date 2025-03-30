@@ -2,10 +2,11 @@ import { request } from '../utils/request';
 import type { FilterRule, GenerateM3UResponse } from '../types/filter';
 import { ApiResponse } from '@/types/api';
 
-export const fetchFilterRules = async (): Promise<FilterRule[]> => {
+export const fetchFilterRules = async (params?: { keyword?: string; type?: string }): Promise<FilterRule[]> => {
   const response = await request<FilterRule[]>({
     method: 'get',
-    url: '/filter-rules'
+    url: '/filter-rules',
+    params
   });
   return response.data;
 };

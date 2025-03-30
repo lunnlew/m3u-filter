@@ -10,10 +10,10 @@ import {
 } from '../api/filterRules';
 import type { FilterRule, GenerateM3UResponse } from '../types/filter';
 
-export const useFilterRules = () => {
+export const useFilterRules = (params?: { keyword?: string; type?: string }) => {
   return useQuery<FilterRule[]>({
-    queryKey: ['filter-rules'],
-    queryFn: fetchFilterRules,
+    queryKey: ['filter-rules', params],
+    queryFn: () => fetchFilterRules(params),
   });
 };
 

@@ -12,10 +12,29 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 @router.get("/stream-sources")
-async def get_stream_sources():
+async def get_stream_sources(keyword: str = None, type: str = None, active: bool = None):
     with get_db_connection() as conn:
         c = conn.cursor()
-        c.execute("SELECT * FROM stream_sources")
+        query = "SELECT * FROM stream_sources"
+        params = []
+        conditions = []
+        
+        if keyword:
+            conditions.append("(name LIKE ? OR url LIKE ?)")
+            params.extend([f'%{keyword}%', f'%{keyword}%'])
+        
+        if type:
+            conditions.append("type = ?")
+            params.append(type)
+        
+        if active is not None:
+            conditions.append("active = ?")
+            params.append(1 if active else 0)
+        
+        if conditions:
+            query += " WHERE " + " AND ".join(conditions)
+        
+        c.execute(query, params)
         columns = [description[0] for description in c.description]
         sources = [dict(zip(columns, row)) for row in c.fetchall()]
         return BaseResponse.success(data=sources)

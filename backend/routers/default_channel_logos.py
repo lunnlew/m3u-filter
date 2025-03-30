@@ -18,13 +18,28 @@ class ChannelLogo(ChannelLogoBase):
     id: int
 
 @router.get("/default-channel-logos")
-async def get_channel_logos():
-    """获取所有默认频道台标配置"""
+async def get_channel_logos(channel_name: str = None, priority: int = None):
+    """获取所有默认频道台标配置，支持按频道名称和优先级筛选"""
     with get_db_connection() as conn:
         cursor = conn.cursor()
-        cursor.execute(
-            "SELECT id, channel_name, logo_url, priority FROM default_channel_logos ORDER BY priority DESC, channel_name"
-        )
+        query = "SELECT id, channel_name, logo_url, priority FROM default_channel_logos"
+        params = []
+        
+        # 构建WHERE子句
+        where_clauses = []
+        if channel_name:
+            where_clauses.append("channel_name LIKE ?")
+            params.append(f"%{channel_name}%")
+        if priority is not None:
+            where_clauses.append("priority = ?")
+            params.append(priority)
+            
+        if where_clauses:
+            query += " WHERE " + " AND ".join(where_clauses)
+            
+        query += " ORDER BY priority DESC, channel_name"
+        
+        cursor.execute(query, params)
         logos = cursor.fetchall()
         return BaseResponse.success(data=[
             ChannelLogo(

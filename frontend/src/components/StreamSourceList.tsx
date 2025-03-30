@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
-import { Table, Button, Modal, App, Tooltip } from 'antd';
+import React, { useState, useMemo } from 'react';
+import { Table, Button, Modal, App, Tooltip, Input, Select, Space, Row, Col } from 'antd';
+import { SearchOutlined, FilterOutlined, ReloadOutlined } from '@ant-design/icons';
 import { StreamSource } from '../types/stream';
 import { useStreamSources, useStreamSourceMutation, useStreamSourceDelete, useStreamSourceSync } from '../hooks/streamSources';
 import { StreamSourceForm } from './StreamSourceForm';
@@ -9,7 +10,17 @@ export const StreamSourceList: React.FC = () => {
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [editingSource, setEditingSource] = useState<StreamSource | null>(null);
 
-  const { data: sources, isLoading } = useStreamSources();
+  // 筛选状态
+  const [keyword, setKeyword] = useState<string>('');
+  const [type, setType] = useState<string>('');
+  const [active, setActive] = useState<boolean | undefined>(undefined);
+
+  // 使用筛选参数调用钩子
+  const { data: sources, isLoading, refetch } = useStreamSources({
+    keyword: keyword || undefined,
+    type: type || undefined,
+    active
+  });
   const sourceMutation = useStreamSourceMutation();
   const deleteMutation = useStreamSourceDelete();
   const syncMutation = useStreamSourceSync();
@@ -125,19 +136,71 @@ export const StreamSourceList: React.FC = () => {
     }
   };
 
+  // 重置筛选条件
+  const handleReset = () => {
+    setKeyword('');
+    setType('');
+    setActive(undefined);
+  };
+
   return (
     <div style={{ padding: '20px' }}>
-      <Button
-        type="primary"
-        onClick={() => {
-          setEditingSource(null);
-          setIsModalVisible(true);
-        }}
-        style={{ marginBottom: '20px' }}
-      >
-        添加直播源
-      </Button>
-
+      <Space size="middle">
+        <Button
+          type="primary"
+          onClick={() => {
+            setEditingSource(null);
+            setIsModalVisible(true);
+          }}
+        >
+          添加直播源
+        </Button>
+        <Input
+          placeholder="搜索名称"
+          value={keyword}
+          onChange={(e) => setKeyword(e.target.value)}
+          style={{ width: 200 }}
+          prefix={<SearchOutlined />}
+          allowClear
+        />
+        <Select
+          placeholder="选择类型"
+          value={type}
+          onChange={setType}
+          style={{ width: 150 }}
+          allowClear
+          options={[
+            { value: 'm3u', label: 'M3U' },
+            { value: 'txt', label: 'TXT' }
+          ]}
+        />
+        <Select
+          placeholder="选择状态"
+          value={active === undefined ? undefined : (active ? 'active' : 'inactive')}
+          onChange={(value) => {
+            if (value === undefined) {
+              setActive(undefined);
+            } else {
+              setActive(value === 'active');
+            }
+          }}
+          style={{ width: 150 }}
+          allowClear
+          options={[
+            { value: 'active', label: '启用' },
+            { value: 'inactive', label: '禁用' }
+          ]}
+        />
+        <Button
+          icon={<ReloadOutlined />}
+          onClick={() => {
+            handleReset();
+            refetch();
+          }}
+        >
+          重置筛选
+        </Button>
+      </Space>
       <Table
         columns={columns}
         dataSource={sources}

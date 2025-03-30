@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Table, Button, Input, Space, Modal, Form, InputNumber, App } from 'antd';
+import { Table, Button, Input, Space, Modal, Form, InputNumber, App, Select } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined } from '@ant-design/icons';
 import { useChannelLogos, useChannelLogoMutation, useChannelLogoDelete } from '../hooks/channelLogo';
 import { useSiteConfig } from '../hooks/siteConfig';
@@ -10,6 +10,12 @@ export const ChannelLogoList: React.FC = () => {
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [editingLogo, setEditingLogo] = useState<ChannelLogo | null>(null);
   const [form] = Form.useForm();
+  const [searchText, setSearchText] = useState('');
+  const [filters, setFilters] = useState({
+    channel_name: '',
+    priority: undefined as number | undefined
+  });
+  const [priorityOptions, setPriorityOptions] = useState<number[]>([]);
   const { data: siteConfig = { base_url: '', resource_url_prefix: '' } } = useSiteConfig();
 
   // 处理logo URL
@@ -22,9 +28,31 @@ export const ChannelLogoList: React.FC = () => {
   };
 
   // 使用封装的hooks获取数据
-  const { data: logos, isLoading } = useChannelLogos();
+  const { data: logos, isLoading } = useChannelLogos(filters);
   const mutation = useChannelLogoMutation();
   const deleteMutation = useChannelLogoDelete();
+  
+  // 提取所有可用的优先级，用于筛选
+  React.useEffect(() => {
+    if (logos) {
+      const uniquePriorities = Array.from(new Set(logos
+        .map((logo) => logo.priority)
+        .filter(Boolean)));
+      setPriorityOptions(uniquePriorities as number[]);
+    }
+  }, [logos]);
+  
+  const handleFilterChange = (field: string, value: any) => {
+    setFilters(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+  
+  const handleSearch = (value: string) => {
+    setSearchText(value);
+    handleFilterChange('channel_name', value);
+  };
 
   const handleModalClose = () => {
     setIsModalVisible(false);
@@ -105,17 +133,34 @@ export const ChannelLogoList: React.FC = () => {
 
   return (
     <div style={{ padding: '24px' }}>
-      <div style={{ marginBottom: 16 }}>
-        <Space>
-          <Button
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={() => setIsModalVisible(true)}
-          >
-            添加台标
-          </Button>
-        </Space>
-      </div>
+      <Space style={{ marginBottom: 16 }} wrap>
+        <Button
+          type="primary"
+          icon={<PlusOutlined />}
+          onClick={() => setIsModalVisible(true)}
+        >
+          添加台标
+        </Button>
+        <Input
+          placeholder="筛选频道名称"
+          value={filters.channel_name}
+          onChange={(e) => handleFilterChange('channel_name', e.target.value)}
+          style={{ width: 180 }}
+          prefix={<SearchOutlined />}
+          allowClear
+        />
+        <Select
+          placeholder="筛选优先级"
+          value={filters.priority}
+          onChange={(value) => handleFilterChange('priority', value)}
+          style={{ width: 150 }}
+          allowClear
+        >
+          {priorityOptions.map(priority => (
+            <Select.Option key={priority} value={priority}>{priority}</Select.Option>
+          ))}
+        </Select>
+      </Space>
 
       <Table
         columns={columns}

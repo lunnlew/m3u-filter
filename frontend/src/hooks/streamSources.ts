@@ -2,10 +2,10 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { fetchStreamSources, createOrUpdateStreamSource, deleteStreamSource, syncStreamSource } from '../api/streamSources';
 import type { StreamSource } from '../types/stream';
 
-export const useStreamSources = () => {
+export const useStreamSources = (params?: { keyword?: string; type?: string; active?: boolean }) => {
   return useQuery<StreamSource[]>({
-    queryKey: ['stream-sources'],
-    queryFn: fetchStreamSources,
+    queryKey: ['stream-sources', params],
+    queryFn: () => fetchStreamSources(params),
   });
 };
 

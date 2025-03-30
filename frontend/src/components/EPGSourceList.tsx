@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Table, Button, Modal, App, Tooltip } from 'antd';
+import { Table, Button, Modal, App, Tooltip, Input, Select, Space } from 'antd';
 import { EPGSourceForm } from './EPGSourceForm';
 import { EPGSource } from '../types/epg';
 import { useEPGSources, useEPGSourceMutation, useEPGSourceDelete, useEPGSourceSync } from '../hooks/epgSources';
@@ -8,8 +8,9 @@ export const EPGSourceList: React.FC = () => {
   const { message } = App.useApp();
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [editingSource, setEditingSource] = useState<EPGSource | null>(null);
+  const [filters, setFilters] = useState<{ name?: string, url?: string, active?: boolean }>({});
 
-  const { data: sources, isLoading } = useEPGSources();
+  const { data: sources, isLoading } = useEPGSources(filters);
   const sourceMutation = useEPGSourceMutation();
   const deleteMutation = useEPGSourceDelete();
   const syncMutation = useEPGSourceSync();
@@ -113,16 +114,43 @@ export const EPGSourceList: React.FC = () => {
 
   return (
     <div style={{ padding: '20px' }}>
-      <Button
-        type="primary"
-        onClick={() => {
-          setEditingSource(null);
-          setIsModalVisible(true);
-        }}
-        style={{ marginBottom: '20px' }}
-      >
-        添加EPG源
-      </Button>
+      <Space>
+        <Button
+          type="primary"
+          onClick={() => {
+            setEditingSource(null);
+            setIsModalVisible(true);
+          }}
+        >
+          添加EPG源
+        </Button>
+        <Input
+          placeholder="搜索名称"
+          value={filters.name || ''}
+          onChange={(e) => setFilters({ ...filters, name: e.target.value })}
+          style={{ width: 150 }}
+          allowClear
+        />
+        <Input
+          placeholder="搜索URL"
+          value={filters.url || ''}
+          onChange={(e) => setFilters({ ...filters, url: e.target.value })}
+          style={{ width: 200 }}
+          allowClear
+        />
+        <Select
+          placeholder="筛选状态"
+          value={filters.active}
+          onChange={(value) => setFilters({ ...filters, active: value })}
+          style={{ width: 120 }}
+          allowClear
+          options={[
+            { value: true, label: '启用' },
+            { value: false, label: '禁用' }
+          ]}
+        />
+        <Button onClick={() => setFilters({})}>重置筛选</Button>
+      </Space>
 
       <Table
         dataSource={sources}

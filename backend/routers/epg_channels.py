@@ -15,11 +15,18 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+from fastapi import APIRouter, HTTPException, Query
+
 @router.get("/epg-channels")
-async def get_channels():
+async def get_channels(
+    channel_id: str = Query(None, description="Filter by channel ID"),
+    source_name: str = Query(None, description="Filter by source name"),
+    category: str = Query(None, description="Filter by category")
+):
     with get_db_connection() as conn:
         c = conn.cursor()
-        c.execute("""
+        # 构建基础SQL查询
+        base_query = """
             SELECT 
                 epg_channels.id, 
                 epg_channels.channel_id, 
@@ -39,7 +46,30 @@ async def get_channels():
                 epg_sources.name AS source_name 
             FROM epg_channels 
             LEFT JOIN epg_sources ON epg_channels.source_id = epg_sources.id
-        """)
+        """
+        
+        # 添加筛选条件
+        where_clauses = []
+        params = []
+        
+        if channel_id:
+            where_clauses.append("epg_channels.channel_id LIKE ?")
+            params.append(f"%{channel_id}%")
+            
+        if source_name:
+            where_clauses.append("epg_sources.name = ?")
+            params.append(source_name)
+            
+        if category:
+            where_clauses.append("epg_channels.category = ?")
+            params.append(category)
+            
+        # 如果有筛选条件，添加WHERE子句
+        if where_clauses:
+            base_query += " WHERE " + " AND ".join(where_clauses)
+            
+        # 执行查询
+        c.execute(base_query, params)
         columns = [description[0] for description in c.description]
         channels = [dict(zip(columns, row)) for row in c.fetchall()]
         return BaseResponse.success(data=channels)

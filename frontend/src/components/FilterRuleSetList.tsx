@@ -1,6 +1,8 @@
 import { useState } from 'react';
-import { Table, Button, Modal, Form, Input, Switch, App, Space, Select } from 'antd';
-import { useFilterRuleSets, useFilterRuleSetMutation, useFilterRuleSetDelete, useAddRuleToSet, useRemoveRuleFromSet, useGenerateM3U, useGenerateTXT  // 新增TXT生成钩子
+import { Table, Button, Modal, Form, Input, Switch, App, Space, Select, Row, Col } from 'antd';
+import { SearchOutlined } from '@ant-design/icons';
+import {
+    useFilterRuleSets, useFilterRuleSetMutation, useFilterRuleSetDelete, useAddRuleToSet, useRemoveRuleFromSet, useGenerateM3U, useGenerateTXT  // 新增TXT生成钩子
 } from '../hooks/filterRuleSets';
 import { useFilterRules } from '../hooks/filterRules';
 import { FilterRuleSet, FilterRule } from '../types/filter';
@@ -16,9 +18,31 @@ export const FilterRuleSetList = () => {
     const [isRuleModalVisible, setIsRuleModalVisible] = useState(false);
     const [editingId, setEditingId] = useState<number | null>(null);
     const [selectedRuleSetId, setSelectedRuleSetId] = useState<number | null>(null);
+    const [searchName, setSearchName] = useState('');
+    const [filterStatus, setFilterStatus] = useState<string>('all');
+    const [filterLogicType, setFilterLogicType] = useState<string>('all');
     const { data: siteConfig = { base_url: '', resource_url_prefix: '' } } = useSiteConfig();
 
-    const { data: ruleSets = [], isLoading } = useFilterRuleSets();
+    // 构建API筛选参数
+    const getFilterParams = () => {
+        const params: any = {};
+
+        if (searchName) {
+            params.name = searchName;
+        }
+
+        if (filterStatus !== 'all') {
+            params.enabled = filterStatus === 'enabled';
+        }
+
+        if (filterLogicType !== 'all') {
+            params.logic_type = filterLogicType;
+        }
+
+        return Object.keys(params).length > 0 ? params : undefined;
+    };
+
+    const { data: ruleSets = [], isLoading } = useFilterRuleSets(getFilterParams());
     const { data: rules = [] } = useFilterRules();
     const mutation = useFilterRuleSetMutation();
     const deleteMutation = useFilterRuleSetDelete();
@@ -183,9 +207,27 @@ export const FilterRuleSetList = () => {
         );
     };
 
-    // 处理数据源，为children元素添加_parentId属性
+    // 处理数据源，为children元素添加_parentId属性并应用筛选条件
     const processDataSource = (data: FilterRuleSet[]) => {
-        return data.map(item => {
+        // 先应用筛选条件
+        const filteredData = data.filter(item => {
+            // 按名称筛选
+            const nameMatch = searchName ? item.name.toLowerCase().includes(searchName.toLowerCase()) : true;
+
+            // 按状态筛选
+            const statusMatch = filterStatus === 'all' ? true :
+                filterStatus === 'enabled' ? item.enabled :
+                    !item.enabled;
+
+            // 按逻辑运算符筛选
+            const logicMatch = filterLogicType === 'all' ? true :
+                item.logic_type === filterLogicType;
+
+            return nameMatch && statusMatch && logicMatch;
+        });
+
+        // 然后处理children
+        return filteredData.map(item => {
             const newItem = { ...item };
             if (newItem.children && newItem.children.length > 0) {
                 newItem.children = newItem.children.map(child => ({
@@ -197,19 +239,55 @@ export const FilterRuleSetList = () => {
         });
     };
 
+    // 重置筛选条件
+    const resetFilters = () => {
+        setSearchName('');
+        setFilterStatus('all');
+        setFilterLogicType('all');
+    };
+
     return (
         <div style={{ padding: '20px' }}>
-            <Button
-                type="primary"
-                onClick={() => {
-                    setEditingId(null);
-                    form.resetFields();
-                    setIsModalVisible(true);
-                }}
-                style={{ marginBottom: 16 }}
-            >
-                创建筛选合集
-            </Button>
+            <Space style={{ marginBottom: 16 }}>
+                <Input
+                    placeholder="按名称搜索"
+                    value={searchName}
+                    onChange={e => setSearchName(e.target.value)}
+                    prefix={<SearchOutlined />}
+                    allowClear
+                />
+                <Select
+                    style={{ width: '100%' }}
+                    placeholder="筛选状态"
+                    value={filterStatus}
+                    onChange={value => setFilterStatus(value)}
+                >
+                    <Select.Option value="all">全部状态</Select.Option>
+                    <Select.Option value="enabled">已启用</Select.Option>
+                    <Select.Option value="disabled">已禁用</Select.Option>
+                </Select>
+                <Select
+                    style={{ width: '100%' }}
+                    placeholder="筛选逻辑运算符"
+                    value={filterLogicType}
+                    onChange={value => setFilterLogicType(value)}
+                >
+                    <Select.Option value="all">全部运算符</Select.Option>
+                    <Select.Option value="AND">与(AND)</Select.Option>
+                    <Select.Option value="OR">或(OR)</Select.Option>
+                </Select>
+                <Button onClick={resetFilters}>重置筛选</Button>
+                <Button
+                    type="primary"
+                    onClick={() => {
+                        setEditingId(null);
+                        form.resetFields();
+                        setIsModalVisible(true);
+                    }}
+                >
+                    创建筛选合集
+                </Button>
+            </Space>
 
             <Table
                 columns={columns}

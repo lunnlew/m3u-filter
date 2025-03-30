@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
-import { Table, Button, Modal, App, Input, Space } from 'antd';
+import React, { useState, useEffect } from 'react';
+import { Table, Button, Modal, App, Input, Space, Select, Form, Row, Col } from 'antd';
+import { SearchOutlined } from '@ant-design/icons';
 import type { TableProps } from 'antd';
 import { EPGChannelForm } from './EPGChannelForm';
 import { useEPGChannels, useEPGChannelMutation, useEPGChannelDelete, useClearAllData, useGenerateEPG } from '../hooks/epgChannels';
@@ -20,8 +21,15 @@ export const EPGChannelList: React.FC = () => {
   const [editingChannel, setEditingChannel] = useState<EPGChannel | null>(null);
   const [searchText, setSearchText] = useState('');
   const [isExporting, setIsExporting] = useState(false);
+  const [filters, setFilters] = useState({
+    channel_id: '',
+    source_name: '',
+    category: ''
+  });
+  const [categories, setCategories] = useState<string[]>([]);
+  const [sources, setSources] = useState<string[]>([]);
 
-  const { data: channels, isLoading } = useEPGChannels();
+  const { data: channels, isLoading } = useEPGChannels(filters);
   const { data: siteConfig = { base_url: '', resource_url_prefix: '' } } = useSiteConfig();
   const { mutateAsync: generateEPG } = useGenerateEPG();
 
@@ -58,6 +66,28 @@ export const EPGChannelList: React.FC = () => {
   const handleSearch = (value: string) => {
     setSearchText(value);
   };
+
+  const handleFilterChange = (field: string, value: string) => {
+    setFilters(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+
+  // 提取所有可用的分类和订阅源，用于筛选
+  useEffect(() => {
+    if (channels) {
+      const uniqueCategories = Array.from(new Set(channels
+        .map((channel: any) => channel.category)
+        .filter(Boolean)));
+      const uniqueSources = Array.from(new Set(channels
+        .map((channel: any) => channel.source_name)
+        .filter(Boolean)));
+
+      setCategories(uniqueCategories as string[]);
+      setSources(uniqueSources as string[]);
+    }
+  }, [channels]);
 
   const handleClearData = async () => {
     Modal.confirm({
@@ -97,7 +127,7 @@ export const EPGChannelList: React.FC = () => {
     }
   };
 
-  const filteredChannels = channels?.filter((channel: EPGChannel) =>
+  const filteredChannels = channels?.filter((channel: any) =>
     searchText ? channel.display_name.toLowerCase().includes(searchText.toLowerCase()) : true
   ) || [];
 
@@ -145,7 +175,7 @@ export const EPGChannelList: React.FC = () => {
 
   return (
     <div style={{ padding: '20px' }}>
-      <Space style={{ marginBottom: '20px' }}>
+      <Space>
         <Button
           type="primary"
           onClick={() => {
@@ -169,12 +199,51 @@ export const EPGChannelList: React.FC = () => {
         >
           清空数据
         </Button>
+        <Input
+          placeholder="筛选频道标识"
+          value={filters.channel_id}
+          onChange={(e) => handleFilterChange('channel_id', e.target.value)}
+          style={{ width: 150 }}
+          allowClear
+        />
+        <Select
+          placeholder="筛选订阅源"
+          value={filters.source_name || undefined}
+          onChange={(value) => handleFilterChange('source_name', value)}
+          style={{ width: 150 }}
+          allowClear
+        >
+          {sources.map(source => (
+            <Select.Option key={source} value={source}>{source}</Select.Option>
+          ))}
+        </Select>
+        <Select
+          placeholder="筛选分类"
+          value={filters.category || undefined}
+          onChange={(value) => handleFilterChange('category', value)}
+          style={{ width: 150 }}
+          allowClear
+        >
+          {categories.map(category => (
+            <Select.Option key={category} value={category}>{category}</Select.Option>
+          ))}
+        </Select>
         <Input.Search
           placeholder="搜索频道名称"
           onSearch={handleSearch}
           onChange={(e) => handleSearch(e.target.value)}
           style={{ width: 200 }}
+          prefix={<SearchOutlined />}
+          allowClear
         />
+        <Button onClick={() => {
+          setFilters({
+            channel_id: '',
+            source_name: '',
+            category: ''
+          });
+          setSearchText('');
+        }}>重置筛选</Button>
       </Space>
 
       <Table

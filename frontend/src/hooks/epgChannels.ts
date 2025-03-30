@@ -13,10 +13,16 @@ export interface GenerateEPGResponse {
   url_path: string;
 }
 
-export const useEPGChannels = () => {
+export interface EPGChannelFilters {
+  channel_id?: string;
+  source_name?: string;
+  category?: string;
+}
+
+export const useEPGChannels = (filters?: EPGChannelFilters) => {
   return useQuery<EPGChannel[]>({
-    queryKey: ['epg-channels'],
-    queryFn: fetchEPGChannels,
+    queryKey: ['epg-channels', filters],
+    queryFn: () => fetchEPGChannels(filters),
   });
 };
 

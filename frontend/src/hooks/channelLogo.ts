@@ -3,10 +3,12 @@ import { message } from 'antd';
 import { fetchChannelLogos, deleteChannelLogo, createOrUpdateChannelLogo, type ChannelLogoInput } from '../api/channelLogo';
 import type { ChannelLogo } from '../types/channel';
 
-export const useChannelLogos = () => {
+import { ChannelLogoFilters } from '../api/channelLogo';
+
+export const useChannelLogos = (filters?: ChannelLogoFilters) => {
   return useQuery<ChannelLogo[]>({
-    queryKey: ['channelLogos'],
-    queryFn: fetchChannelLogos,
+    queryKey: ['channelLogos', filters],
+    queryFn: () => fetchChannelLogos(filters),
   });
 };
 

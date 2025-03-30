@@ -3,10 +3,21 @@ import type { EPGChannel } from '../types/epg';
 import { ApiResponse } from '@/types/api';
 import { GenerateEPGResponse } from '@/hooks/epgChannels';
 
-export const fetchEPGChannels = async (): Promise<EPGChannel[]> => {
+import { EPGChannelFilters } from '../hooks/epgChannels';
+
+export const fetchEPGChannels = async (filters?: EPGChannelFilters): Promise<EPGChannel[]> => {
+  // 构建查询参数
+  const params: Record<string, string> = {};
+  if (filters) {
+    if (filters.channel_id) params.channel_id = filters.channel_id;
+    if (filters.source_name) params.source_name = filters.source_name;
+    if (filters.category) params.category = filters.category;
+  }
+
   const response = await request<EPGChannel[]>({
     method: 'get',
-    url: '/epg-channels'
+    url: '/epg-channels',
+    params
   });
   return response.data;
 };

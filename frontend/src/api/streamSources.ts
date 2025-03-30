@@ -2,10 +2,11 @@ import { request } from '../utils/request';
 import type { StreamSource } from '../types/stream';
 import { ApiResponse } from '@/types/api';
 
-export const fetchStreamSources = async (): Promise<StreamSource[]> => {
+export const fetchStreamSources = async (params?: { keyword?: string; type?: string; active?: boolean }): Promise<StreamSource[]> => {
   const response = await request<StreamSource[]>({
     method: 'get',
-    url: '/stream-sources'
+    url: '/stream-sources',
+    params
   });
   return response.data;
 };
