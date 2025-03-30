@@ -91,7 +91,7 @@ export const EPGChannelList: React.FC = () => {
         )
       });
     } catch (err) {
-      message.error(err instanceof Error ? err.message : 'EPG导出失败');
+      message.error(err instanceof Error ? err.message : 'EPG生成失败');
     } finally {
       setIsExporting(false);
     }
@@ -102,6 +102,7 @@ export const EPGChannelList: React.FC = () => {
   ) || [];
 
   const columns: TableProps<EPGChannel>['columns'] = [
+    { title: '频道标识', dataIndex: 'channel_id', key: 'channel_id' },
     { title: '频道名称', dataIndex: 'display_name', key: 'display_name' },
     { title: '订阅源', dataIndex: 'source_name', key: 'source_name' },
     { title: '语言', dataIndex: 'language', key: 'language' },
@@ -159,7 +160,7 @@ export const EPGChannelList: React.FC = () => {
           onClick={handleExportEPG}
           loading={isExporting}
         >
-          导出EPG
+          生成EPG
         </Button>
         <Button
           danger

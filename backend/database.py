@@ -16,6 +16,9 @@ def init_db_pool():
     for _ in range(5):
         conn = sqlite3.connect(DATABASE_FILE, check_same_thread=False)
         db_pool.put(conn)
+    
+    # 初始化数据库结构
+    init_db()
 
 @contextmanager
 def get_db_connection():
@@ -74,16 +77,28 @@ def init_db():
         for version, script in enumerate(migration_scripts, start=1):
             if version > current_version:
                 try:
+                    # Check if this version was partially applied
+                    c.execute("SELECT COUNT(*) FROM db_version WHERE version = ?", (version,))
+                    if c.fetchone()[0] > 0:
+                        logger.warning(f"Skipping version {version} as it was already partially applied")
+                        continue
+                        
                     c.executescript(script)
                     c.execute(
                         "INSERT INTO db_version (version, applied_at) VALUES (?, ?)",
                         (version, datetime.now().isoformat())
                     )
                     conn.commit()
-                except Exception as e:
-                    print(f"Error applying upgrade script {version}: {str(e)}")
+                    logger.info(f"Successfully applied database upgrade version {version}")
+                except sqlite3.IntegrityError as e:
+                    logger.error(f"Database integrity error in version {version}: {str(e)}")
                     conn.rollback()
-                    break
+                    # Continue with next migration instead of breaking
+                    continue
+                except Exception as e:
+                    logger.error(f"Error applying upgrade script {version}: {str(e)}")
+                    conn.rollback()
+                    continue
 
 # 初始化数据库连接池
 init_db_pool()

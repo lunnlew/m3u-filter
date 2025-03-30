@@ -15,30 +15,89 @@ from concurrent.futures import ThreadPoolExecutor
 from functools import partial
 import re  # 添加 re 模块导入
 import time
+from .blocked_domains import should_skip_domain, record_domain_failure, get_domain_key
 
 import logging
 logger = logging.getLogger(__name__)
 
-# 修改 test_stream_url 函数，添加测速逻辑
+# 添加批量更新队列
+failure_update_queue = []
+FAILURE_BATCH_SIZE = 50
+last_failure_update = time.time()
+FAILURE_UPDATE_INTERVAL = 60  # 秒
+
+async def increment_failure_count(track_id: int):
+    """增加流媒体源的失败计数"""
+    global failure_update_queue, last_failure_update
+    
+    # 添加到更新队列
+    failure_update_queue.append({
+        'track_id': track_id,
+        'timestamp': datetime.now().isoformat()
+    })
+    
+    # 检查是否需要执行批量更新
+    current_time = time.time()
+    if (len(failure_update_queue) >= FAILURE_BATCH_SIZE or 
+        current_time - last_failure_update >= FAILURE_UPDATE_INTERVAL):
+        await batch_update_failures()
+
+async def batch_update_failures():
+    """批量更新失败计数"""
+    global failure_update_queue, last_failure_update
+    
+    if not failure_update_queue:
+        return
+        
+    updates = failure_update_queue.copy()
+    failure_update_queue.clear()
+    last_failure_update = time.time()
+    
+    try:
+        with get_db_connection() as conn:
+            c = conn.cursor()
+            c.executemany("""
+                UPDATE stream_tracks 
+                SET probe_failure_count = COALESCE(probe_failure_count, 0) + 1,
+                    last_failure_time = ?
+                WHERE id = ?
+            """, [(u['timestamp'], u['track_id']) for u in updates])
+            conn.commit()
+            logger.debug(f"批量更新了 {len(updates)} 个频道的失败计数")
+    except Exception as e:
+        logger.error(f"批量更新失败计数时出错: {str(e)}")
+        # 如果更新失败，将未更新的记录放回队列
+        failure_update_queue.extend(updates)
+
 async def test_stream_url(url: str, track_id: int = None) -> tuple[bool, float, dict]:
     start_time = datetime.now()
     logger.info(f"开始测试流媒体URL: {url}, track_id: {track_id}")
 
-    # 检查是否应该跳过该域名
-    if should_skip_domain(url):
-        logger.warning(f"跳过测试频繁失败的域名: {get_domain_key(url)}")
+    # 检查域名是否在黑名单中
+    domain_key = get_domain_key(url)
+    if not domain_key:
+        logger.error(f"无法获取有效的域名键值: {url}")
+        if track_id:
+            await increment_failure_count(track_id)
+        return False, 0.0, get_default_stream_info()
+        
+    if await should_skip_domain(domain_key):
+        logger.warning(f"跳过测试黑名单域名: {url}")
+        if track_id:
+            await increment_failure_count(track_id)
         return False, 0.0, get_default_stream_info()
 
     try:
         # 执行探测任务获取码率信息
-        logger.debug(f"开始执行FFmpeg探测: {url}")
         probe_result = await probe_stream(url)
         if not probe_result:
-            record_domain_failure(url, "FFmpeg探测失败")
-            logger.warning(f"FFmpeg探测失败或返回空结果: {url}")
+            # 只有在域名键值有效时才记录失败
+            if domain_key:
+                asyncio.create_task(record_domain_failure(domain_key, "FFmpeg探测失败"))
+            if track_id:
+                asyncio.create_task(increment_failure_count(track_id))
             return False, 0.0, get_default_stream_info()
-        logger.debug(f"FFmpeg探测完成: {url}")
-        
+            
         # 从探测结果中获取码率
         logger.debug(f"开始提取码率信息: {url}")
         bitrate = await extract_bitrate(probe_result)
@@ -72,9 +131,14 @@ async def test_stream_url(url: str, track_id: int = None) -> tuple[bool, float, 
         return status, duration, stream_info
 
     except Exception as e:
-        # 记录域名失败
-        record_domain_failure(url, str(e))
+        # 只有在域名键值有效时才记录失败
+        if domain_key:
+            asyncio.create_task(record_domain_failure(domain_key, str(e)))
         logger.error(f"测试流媒体URL时发生错误: {url}, 错误信息: {str(e)}")
+        
+        if track_id:
+            await increment_failure_count(track_id)
+            
         return False, 0.0, get_default_stream_info()
 
 async def extract_bitrate(probe_result: dict) -> int:
@@ -301,9 +365,9 @@ async def get_stream_tracks(
         if source_id:
             where_clause += " AND st.source_id = ?"
             params.append(source_id)
-        if test_status is not None and test_status:
+        if test_status is not None:
             where_clause += " AND st.test_status =?"
-            params.append(test_status)
+            params.append(test_status == True)
 
         # 获取总记录数
         count_query = f"SELECT COUNT(*) FROM stream_tracks st {where_clause}"
@@ -313,7 +377,10 @@ async def get_stream_tracks(
         # 计算分页参数
         offset = (page - 1) * page_size
         # 获取分页数据，包含source信息
-        query = f"""SELECT st.*, ss.name as source_name, ss.url as source_url, ss.type as source_type, COALESCE(st.download_speed, 0) as download_speed 
+        query = f"""SELECT st.*, ss.name as source_name, ss.url as source_url, ss.type as source_type, 
+                 COALESCE(st.download_speed, 0) as download_speed,
+                 COALESCE(st.probe_failure_count, 0) as probe_failure_count,
+                 st.last_failure_time
                  FROM stream_tracks st 
                  LEFT JOIN stream_sources ss ON st.source_id = ss.id 
                  {where_clause} 
@@ -372,10 +439,7 @@ async def test_all_tracks():
         c = conn.cursor()
         c.execute("""
             SELECT id FROM stream_tracks 
-            WHERE last_test_time < datetime('now','-6 hours') 
-               OR last_test_time IS NULL
-               OR download_speed IS NULL
-               OR download_speed = 0
+            WHERE last_test_time < datetime('now','-6 hours') AND COALESCE(probe_failure_count, 0) < 5
         """)
         track_ids = [row[0] for row in c.fetchall()]
         
@@ -846,65 +910,3 @@ FAILURE_DECAY_TIME = 1800  # 失败次数衰减时间（秒）
 
 # 域名失败计数缓存
 domain_failures: Dict[str, List[Tuple[datetime, str]]] = {}
-
-def get_domain_key(url: str) -> str:
-    """从URL中提取域名/IP和端口作为键"""
-    try:
-        parsed_url = urlparse(url)
-        host = parsed_url.hostname or ''
-        port = parsed_url.port or ('443' if parsed_url.scheme == 'https' else '80')
-        return f"{host}:{port}"
-    except Exception as e:
-        logger.error(f"解析URL失败: {url}, 错误: {str(e)}")
-        return url
-
-def record_domain_failure(url: str, error: str) -> bool:
-    """
-    记录域名失败并返回是否应该跳过该域名
-    返回: 如果应该跳过返回True，否则返回False
-    """
-    domain_key = get_domain_key(url)
-    now = datetime.now()
-    
-    # 清理过期的失败记录
-    if domain_key in domain_failures:
-        domain_failures[domain_key] = [
-            (t, e) for t, e in domain_failures[domain_key]
-            if (now - t).total_seconds() < FAILURE_WINDOW
-        ]
-    
-    # 添加新的失败记录
-    if domain_key not in domain_failures:
-        domain_failures[domain_key] = []
-    domain_failures[domain_key].append((now, error))
-    
-    # 计算当前失败次数
-    recent_failures = len(domain_failures[domain_key])
-    
-    # 如果失败次数超过阈值，记录警告日志
-    if recent_failures >= FAILURE_THRESHOLD:
-        logger.warning(f"域名 {domain_key} 在 {FAILURE_WINDOW} 秒内失败 {recent_failures} 次，暂时跳过测试")
-        return True
-    
-    return False
-
-def should_skip_domain(url: str) -> bool:
-    """检查是否应该跳过该域名的测试"""
-    domain_key = get_domain_key(url)
-    if domain_key not in domain_failures:
-        return False
-    
-    now = datetime.now()
-    # 清理过期的失败记录
-    domain_failures[domain_key] = [
-        (t, e) for t, e in domain_failures[domain_key]
-        if (now - t).total_seconds() < FAILURE_WINDOW
-    ]
-    
-    # 如果没有最近的失败记录，删除该域名的记录
-    if not domain_failures[domain_key]:
-        del domain_failures[domain_key]
-        return False
-    
-    # 检查失败次数是否超过阈值
-    return len(domain_failures[domain_key]) >= FAILURE_THRESHOLD

@@ -16,6 +16,7 @@ import io
 import zipfile
 import gzip
 from config import DATABASE_FILE
+from routers.blocked_domains import should_skip_domain
 
 def get_proxy_config():
     """获取代理配置"""
@@ -335,7 +336,17 @@ async def sync_stream_source(source_id: int):
         
         print(f"[同步直播源] 解析完成，获取到 {len(channels)} 个频道")
         
-        # 更新数据库中的同步时间和频道数据
+        # 过滤黑名单域名
+        filtered_channels = []
+        for channel in channels:
+            if not await should_skip_domain(channel['url']):
+                filtered_channels.append(channel)
+            else:
+                print(f"[同步直播源] 跳过黑名单域名: {channel['url']}")
+        
+        print(f"[同步直播源] 过滤后剩余 {len(filtered_channels)} 个频道")
+        
+        # 更新数据库
         with get_db_connection() as conn:
             c = conn.cursor()
             try:
@@ -343,8 +354,8 @@ async def sync_stream_source(source_id: int):
                 # 先删除该源的旧数据
                 c.execute("DELETE FROM stream_tracks WHERE source_id = ?", (source_id,))
                 
-                # 插入新的频道数据
-                for channel in channels:
+                # 插入过滤后的频道数据
+                for channel in filtered_channels:
                     c.execute(
                         "INSERT INTO stream_tracks (source_id, name, url, group_title, tvg_id, tvg_name, tvg_logo, tvg_language, route_info, catchup, catchup_source) "
                         "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
@@ -362,7 +373,7 @@ async def sync_stream_source(source_id: int):
                             tvg_channel.get('catchup_source')
                         )
                     )
-                
+
                 # 更新同步时间
                 c.execute(
                     "UPDATE stream_sources SET last_update = CURRENT_TIMESTAMP, x_tvg_url = ?, catchup = ?, catchup_source = ? WHERE id = ?",
@@ -391,7 +402,7 @@ async def sync_stream_source(source_id: int):
                 raise Exception(f"更新数据库失败: {str(e)}")
         
         print(f"[同步直播源] 同步完成，源ID: {source_id}")
-        return channels
+        return filtered_channels
                 
     except aiohttp.ClientError as e:
         error_msg = f"网络请求失败: {str(e)}"

@@ -14,6 +14,7 @@ from .filter_rules import router as filter_rules_router
 from .filter_rule_sets import router as filter_rule_sets_router
 from .health import router as health_router
 from .sort_templates import router as sort_templates_router
+from .blocked_domains import router as blocked_domains_router
 
 api_router = APIRouter()
 
@@ -29,4 +30,5 @@ api_router.include_router(filter_rules_router, prefix="/api", tags=["filter-rule
 api_router.include_router(filter_rule_sets_router, prefix="/api", tags=["filter-rule-sets"])
 api_router.include_router(health_router, prefix="/api", tags=["health"])
 api_router.include_router(sort_templates_router, prefix="/api", tags=["sort-templates"])
+api_router.include_router(blocked_domains_router, prefix="/api", tags=["blocked-domains"])
 api_router.include_router(static_files_router, tags=["static-files"])  # 移到最后

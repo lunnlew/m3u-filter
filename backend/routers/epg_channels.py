@@ -49,8 +49,8 @@ async def create_channel(channel: EPGChannel):
     with get_db_connection() as conn:
         c = conn.cursor()
         c.execute(
-            "INSERT INTO epg_channels (display_name, language, category, logo_url, local_logo_path) VALUES (?, ?, ?, ?, ?)",
-            (channel.display_name, channel.language, channel.category, channel.logo_url, channel.local_logo_path)
+            "INSERT INTO epg_channels (channel_id, channel_iddisplay_name, language, category, logo_url, local_logo_path) VALUES (?, ?, ?, ?, ?)",
+            (channel.channel_id, channel.display_name, channel.language, channel.category, channel.logo_url, channel.local_logo_path)
         )
         channel_id = c.lastrowid
         conn.commit()
@@ -62,8 +62,8 @@ async def update_channel(channel_id: int, channel: EPGChannel):
     with get_db_connection() as conn:
         c = conn.cursor()
         c.execute(
-            "UPDATE epg_channels SET display_name = ?, language = ?, category = ?, logo_url = ?, local_logo_path = ? WHERE id = ?",
-            (channel.display_name, channel.language, channel.category, channel.logo_url, channel.local_logo_path, channel_id)
+            "UPDATE epg_channels SET channel_id = ?, display_name = ?, language = ?, category = ?, logo_url = ?, local_logo_path = ? WHERE id = ?",
+            (channel.channel_id, channel.display_name, channel.language, channel.category, channel.logo_url, channel.local_logo_path, channel_id)
         )
         if c.rowcount == 0:
             return BaseResponse.error(message="频道不存在", code=404)
@@ -117,7 +117,7 @@ async def export_epg_xml():
         # 创建XML根元素
         tv = ET.Element("tv")
         tv.set("generator-info-name", "M3U Filter EPG Generator")
-        tv.set("generator-info-url", "https://github.com/your-repo/m3u-filter")
+        tv.set("generator-info-url", "https://github.com/lunnlew/m3u-filter")
         
         # 获取启用的频道信息，使用与get_channels相同的logo获取逻辑，并添加去重逻辑
         c.execute("""

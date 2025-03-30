@@ -18,6 +18,8 @@ export interface StreamTrack {
   last_test_time?: string;
   created_at?: string;
   updated_at?: string;
+  probe_failure_count?: number;
+  last_failure_time?: string;
 }
 
 export interface PaginatedStreamTracks {

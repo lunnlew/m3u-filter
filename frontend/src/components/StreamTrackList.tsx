@@ -91,6 +91,16 @@ export default function StreamTrackList() {
       key: 'group_title',
     },
     {
+      title: '失败次数',
+      dataIndex: 'probe_failure_count',
+      key: 'probe_failure_count',
+      render: (count: number, record: StreamTrack) => (
+        <Tooltip title={record.last_failure_time ? `最后失败时间: ${record.last_failure_time}` : '暂无失败记录'}>
+          <span>{count || 0}</span>
+        </Tooltip>
+      ),
+    },
+    {
       title: '订阅源',
       dataIndex: 'source_name',
       key: 'source_name',

@@ -21,6 +21,7 @@ class EPGProgram(BaseModel):
 
 class EPGChannel(BaseModel):
     id: Optional[int] = None
+    channel_id: str
     display_name: str
     language: str
     category: Optional[str] = None
