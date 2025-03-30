@@ -19,6 +19,7 @@ export interface FilterRuleSet {
   children?: any[];
   sync_interval: number;
   logic_type: string;
+  _parentId?: string
 }
 
 export interface GenerateM3UResponse {

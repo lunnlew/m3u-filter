@@ -183,6 +183,20 @@ export const FilterRuleSetList = () => {
         );
     };
 
+    // 处理数据源，为children元素添加_parentId属性
+    const processDataSource = (data: FilterRuleSet[]) => {
+        return data.map(item => {
+            const newItem = { ...item };
+            if (newItem.children && newItem.children.length > 0) {
+                newItem.children = newItem.children.map(child => ({
+                    ...child,
+                    _parentId: newItem.id
+                }));
+            }
+            return newItem;
+        });
+    };
+
     return (
         <div style={{ padding: '20px' }}>
             <Button
@@ -199,8 +213,12 @@ export const FilterRuleSetList = () => {
 
             <Table
                 columns={columns}
-                dataSource={ruleSets}
-                rowKey="id"
+                dataSource={processDataSource(ruleSets)}
+                rowKey={(record) => {
+                    // 为每个行生成唯一的key
+                    // 如果是子元素，使用父id和子id的组合作为唯一标识
+                    return record._parentId ? `${record._parentId}-${record.id}` : `${record.id}`;
+                }}
                 loading={isLoading}
             />
 

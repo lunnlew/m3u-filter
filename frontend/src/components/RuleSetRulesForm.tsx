@@ -11,6 +11,15 @@ interface RuleSetRulesFormProps {
     isRuleInSet: (item: FilterRule | FilterRuleSet, ruleSetId: number) => boolean;
 }
 
+const typeMap: Record<string, string> = {
+  'name': '名称匹配',
+  'keyword': '关键词匹配',
+  'resolution': '分辨率匹配',
+  'group': '分组匹配',
+  'source_name': '来源名称匹配',
+  'bitrate': '码率匹配'
+};
+
 export const RuleSetRulesForm: React.FC<RuleSetRulesFormProps> = ({
     selectedRuleSetId,
     ruleSets,
@@ -31,7 +40,7 @@ export const RuleSetRulesForm: React.FC<RuleSetRulesFormProps> = ({
                             options: rules
                                 .filter(rule => !isRuleInSet(rule, selectedRuleSetId))
                                 .map(rule => ({
-                                    label: rule.name,
+                                    label: rule.name + ' - ' + (typeMap[rule.type] || rule.type),
                                     value: `rule_${rule.id}`,
                                     type: 'rule'
                                 }))
