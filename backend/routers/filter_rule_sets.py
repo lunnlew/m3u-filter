@@ -13,9 +13,7 @@ import logging
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-
 from pydantic import BaseModel
-
 
 class FilterRuleSetResponse(BaseModel):
     id: int

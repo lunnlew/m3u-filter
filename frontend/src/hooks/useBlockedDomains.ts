@@ -6,6 +6,8 @@ interface BlockedDomainsHook {
   domains: BlockedDomain[];
   loading: boolean;
   total: number;
+  keyword: string;
+  setKeyword: React.Dispatch<React.SetStateAction<string>>;
   fetchDomains: (page?: number, pageSize?: number) => Promise<void>;
   removeDomain: (domain: string) => Promise<void>;
 }
@@ -14,11 +16,12 @@ export const useBlockedDomains = (): BlockedDomainsHook => {
   const [domains, setDomains] = useState<BlockedDomain[]>([]);
   const [loading, setLoading] = useState(false);
   const [total, setTotal] = useState(0);
+  const [keyword, setKeyword] = useState('');
 
   const fetchDomains = async (page: number = 1, pageSize: number = 10) => {
     setLoading(true);
     try {
-      const response = await fetchBlockedDomains(page, pageSize);
+      const response = await fetchBlockedDomains(page, pageSize, keyword);
       setDomains(response.items);
       setTotal(response.total);
     } catch (error) {
@@ -42,6 +45,8 @@ export const useBlockedDomains = (): BlockedDomainsHook => {
     domains,
     loading,
     total,
+    keyword,
+    setKeyword,
     fetchDomains,
     removeDomain
   };

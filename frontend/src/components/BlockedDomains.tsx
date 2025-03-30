@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Card, Table, Button, Tag } from 'antd';
+import { Card, Table, Button, Tag, Input } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { DeleteOutlined, ReloadOutlined } from '@ant-design/icons';
 import { useBlockedDomains } from '../hooks/useBlockedDomains';
@@ -15,7 +15,15 @@ interface BlockedDomain {
 const BlockedDomains: React.FC = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
-  const { domains, loading, total, fetchDomains, removeDomain } = useBlockedDomains();
+  const { 
+    domains, 
+    loading, 
+    total, 
+    keyword,
+    setKeyword,
+    fetchDomains, 
+    removeDomain 
+  } = useBlockedDomains();
 
   const getFailureColor = (count: number) => {
     if (count >= 10) return 'red';
@@ -78,17 +86,38 @@ const BlockedDomains: React.FC = () => {
     fetchDomains(currentPage, pageSize);
   }, []);
 
+  const handleSearch = (value: string) => {
+    setKeyword(value);
+    setCurrentPage(1); // 重置页码
+    fetchDomains(1, pageSize);
+  };
+
   return (
     <Card
-      title="域名黑名单"
+      title={
+        <span>
+          域名黑名单
+          <Tag color="red">
+            失败次数大于等于10的域名，对应直播源将跳过入库及测速
+          </Tag>
+        </span>
+      }
       extra={
-        <Button
-          type="primary"
-          icon={<ReloadOutlined />}
-          onClick={() => fetchDomains(currentPage, pageSize)}
-        >
-          刷新
-        </Button>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <Input.Search
+            placeholder="搜索域名"
+            allowClear
+            onSearch={handleSearch}
+            style={{ width: 200 }}
+          />
+          <Button
+            type="primary"
+            icon={<ReloadOutlined />}
+            onClick={() => fetchDomains(currentPage, pageSize)}
+          >
+            刷新
+          </Button>
+        </div>
       }
     >
       <Table

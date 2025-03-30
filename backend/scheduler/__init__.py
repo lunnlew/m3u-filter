@@ -25,7 +25,10 @@ async def test_all_stream_tracks():
     """测试所有直播源的连通性和速度"""
     with get_db_connection() as conn:
         c = conn.cursor()
-        c.execute("SELECT id FROM stream_tracks")
+        c.execute("""
+            SELECT id FROM stream_tracks 
+            WHERE COALESCE(probe_failure_count, 0) < 5
+        """)
         track_ids = [row[0] for row in c.fetchall()]
         
     for track_id in track_ids:

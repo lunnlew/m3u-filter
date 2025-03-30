@@ -46,10 +46,16 @@ domain_status_cache = {}
 CACHE_CLEANUP_INTERVAL = 300  # 缓存清理间隔（秒）
 last_cache_cleanup = time.time()
 
+# Update the constant at the top of the file
+FAILURE_THRESHOLD = 10  # Change from 4 to 10 to match database threshold
+
 async def should_skip_domain(url: str) -> bool:
     """检查是否应该跳过该域名的测试"""
     global last_cache_cleanup
     domain_key = get_domain_key(url)
+    if not domain_key:  # Add early return for invalid domain
+        return False
+        
     now = datetime.now()
     
     # 清理过期缓存
@@ -67,31 +73,39 @@ async def should_skip_domain(url: str) -> bool:
             del domain_status_cache[domain_key]
     
     # 检查内存中的临时失败记录
+    total_failures = 0
     if domain_key in domain_failures:
-        domain_failures[domain_key] = [
+        # 清理过期记录并计算有效失败次数
+        valid_failures = [
             (t, e) for t, e in domain_failures[domain_key]
             if (now - t).total_seconds() < FAILURE_WINDOW
         ]
-        if len(domain_failures[domain_key]) >= FAILURE_THRESHOLD:
+        domain_failures[domain_key] = valid_failures
+        total_failures = len(valid_failures)
+        
+        if total_failures >= FAILURE_THRESHOLD:
             domain_status_cache[domain_key] = {
                 'should_skip': True,
                 'timestamp': now
             }
             return True
-        elif not domain_failures[domain_key]:
+        elif not valid_failures:
             del domain_failures[domain_key]
     
     # 如果缓存中没有，则查询数据库
     try:
         with get_db_connection() as conn:
             c = conn.cursor()
+            # Add total_failures to the database count
             c.execute("""
-                SELECT 1 FROM blocked_domains 
+                SELECT failure_count FROM blocked_domains 
                 WHERE domain = ? 
                 AND datetime(last_failure_time) > datetime('now', ?)
-                AND failure_count >= 10
             """, (domain_key, f'-{FAILURE_DECAY_TIME} seconds'))
-            should_skip = bool(c.fetchone())
+            result = c.fetchone()
+            db_failures = result[0] if result else 0
+            
+            should_skip = (db_failures + total_failures) >= FAILURE_THRESHOLD
             
             # 更新缓存
             domain_status_cache[domain_key] = {
@@ -267,26 +281,36 @@ async def batch_update_blocked_domains():
         logger.error(f"准备更新数据时出错: {str(e)}")
 
 @router.get("")
-async def get_blocked_domains(page: int = 1, page_size: int = 10):
+async def get_blocked_domains(page: int = 1, page_size: int = 10, keyword: str = None):
     """获取被阻止的域名列表（分页）"""
     try:
         with get_db_connection() as conn:
             c = conn.cursor()
+            
+            # 构建查询条件
+            where_clause = "datetime(last_failure_time) > datetime('now', ?)"
+            params = [f'-{FAILURE_DECAY_TIME} seconds']
+            
+            if keyword:
+                where_clause += " AND domain LIKE ?"
+                params.append(f"%{keyword}%")
+            
             # 获取总记录数
-            c.execute("""
+            c.execute(f"""
                 SELECT COUNT(*) FROM blocked_domains
-                WHERE datetime(last_failure_time) > datetime('now', ?)
-            """, (f'-{FAILURE_DECAY_TIME} seconds',))
+                WHERE {where_clause}
+            """, params)
             total = c.fetchone()[0]
             
             # 获取分页数据
-            c.execute("""
+            params.extend([page_size, (page - 1) * page_size])
+            c.execute(f"""
                 SELECT domain, failure_count, last_failure_time, created_at, updated_at
                 FROM blocked_domains
-                WHERE datetime(last_failure_time) > datetime('now', ?)
+                WHERE {where_clause}
                 ORDER BY failure_count DESC
                 LIMIT ? OFFSET ?
-            """, (f'-{FAILURE_DECAY_TIME} seconds', page_size, (page - 1) * page_size))
+            """, params)
             
             columns = [description[0] for description in c.description]
             domains = [dict(zip(columns, row)) for row in c.fetchall()]

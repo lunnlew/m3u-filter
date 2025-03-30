@@ -26,21 +26,41 @@ FAILURE_BATCH_SIZE = 50
 last_failure_update = time.time()
 FAILURE_UPDATE_INTERVAL = 60  # 秒
 
-async def increment_failure_count(track_id: int):
+async def increment_failure_count(track_id: int, url: str = None):
     """增加流媒体源的失败计数"""
     global failure_update_queue, last_failure_update
     
-    # 添加到更新队列
-    failure_update_queue.append({
-        'track_id': track_id,
-        'timestamp': datetime.now().isoformat()
-    })
+    try:
+        # 如果提供了URL，直接使用；否则才查询数据库
+        if not url:
+            with get_db_connection() as conn:
+                c = conn.cursor()
+                c.execute("SELECT url FROM stream_tracks WHERE id = ?", (track_id,))
+                result = c.fetchone()
+                if not result:
+                    return
+                url = result[0]
+        
+        # 获取域名键值并记录失败
+        domain_key = get_domain_key(url)
+        if domain_key:
+            # 等待域名失败记录完成
+            await record_domain_failure(domain_key, "Stream probe failed")
     
-    # 检查是否需要执行批量更新
-    current_time = time.time()
-    if (len(failure_update_queue) >= FAILURE_BATCH_SIZE or 
-        current_time - last_failure_update >= FAILURE_UPDATE_INTERVAL):
-        await batch_update_failures()
+        # 添加到更新队列
+        failure_update_queue.append({
+            'track_id': track_id,
+            'timestamp': datetime.now().isoformat()
+        })
+        
+        # 检查是否需要执行批量更新
+        current_time = time.time()
+        if (len(failure_update_queue) >= FAILURE_BATCH_SIZE or 
+            current_time - last_failure_update >= FAILURE_UPDATE_INTERVAL):
+            await batch_update_failures()
+            
+    except Exception as e:
+        logger.error(f"增加失败计数时出错: {str(e)}")
 
 async def batch_update_failures():
     """批量更新失败计数"""
@@ -78,13 +98,12 @@ async def test_stream_url(url: str, track_id: int = None) -> tuple[bool, float, 
     if not domain_key:
         logger.error(f"无法获取有效的域名键值: {url}")
         if track_id:
-            await increment_failure_count(track_id)
+            await increment_failure_count(track_id, url)  # 传入URL参数
         return False, 0.0, get_default_stream_info()
         
     if await should_skip_domain(domain_key):
         logger.warning(f"跳过测试黑名单域名: {url}")
-        if track_id:
-            await increment_failure_count(track_id)
+        # 移除对失败计数的更新
         return False, 0.0, get_default_stream_info()
 
     try:
@@ -93,9 +112,9 @@ async def test_stream_url(url: str, track_id: int = None) -> tuple[bool, float, 
         if not probe_result:
             # 只有在域名键值有效时才记录失败
             if domain_key:
-                asyncio.create_task(record_domain_failure(domain_key, "FFmpeg探测失败"))
+                await record_domain_failure(domain_key, "FFmpeg探测失败")
             if track_id:
-                asyncio.create_task(increment_failure_count(track_id))
+                await increment_failure_count(track_id, url)
             return False, 0.0, get_default_stream_info()
             
         # 从探测结果中获取码率
@@ -439,7 +458,7 @@ async def test_all_tracks():
         c = conn.cursor()
         c.execute("""
             SELECT id FROM stream_tracks 
-            WHERE last_test_time < datetime('now','-6 hours') AND COALESCE(probe_failure_count, 0) < 5
+            WHERE COALESCE(probe_failure_count, 0) < 5
         """)
         track_ids = [row[0] for row in c.fetchall()]
         

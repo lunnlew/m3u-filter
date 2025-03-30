@@ -15,13 +15,18 @@ export interface BlockedDomainsResponse {
   page_size: number;
 }
 
-export const fetchBlockedDomains = async (page: number = 1, pageSize: number = 10): Promise<BlockedDomainsResponse> => {
+export const fetchBlockedDomains = async (
+  page: number = 1, 
+  pageSize: number = 10,
+  keyword?: string
+): Promise<BlockedDomainsResponse> => {
   const response = await request<BlockedDomainsResponse>({
     method: 'get',
     url: '/blocked-domains',
     params: {
       page,
-      page_size: pageSize
+      page_size: pageSize,
+      keyword
     }
   });
   return response.data;

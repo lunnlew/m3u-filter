@@ -33,8 +33,12 @@ export const EPGChannelForm: React.FC<EPGChannelFormProps> = ({
       <Form.Item name="id" hidden>
         <Input />
       </Form.Item>
-      <Form.Item name="channel_id" hidden>
-        <Input />
+      <Form.Item
+        name="channel_id"
+        label="频道标识"
+        rules={[{ required: true, message: '请输入频道标识' }]}
+      >
+        <Input placeholder="请输入频道标识" />
       </Form.Item>
       <Form.Item
         name="display_name"
