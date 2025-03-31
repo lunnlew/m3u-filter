@@ -354,6 +354,7 @@ async def generate_m3u_file(
                 stream_tracks.tvg_logo,
                 stream_tracks.tvg_language,
                 stream_tracks.group_title,
+                stream_tracks.test_status,
                 stream_tracks.catchup,
                 stream_tracks.catchup_source,
                 stream_tracks.download_speed,
@@ -375,15 +376,14 @@ async def generate_m3u_file(
             FROM stream_tracks
             LEFT JOIN epg_channels ON stream_tracks.name = epg_channels.display_name
             LEFT JOIN epg_sources ON epg_channels.source_id = epg_sources.id
-            WHERE stream_tracks.test_status = 1
         """)
         columns = [description[0] for description in cursor.description]
         channels = [dict(zip(columns, row)) for row in cursor.fetchall()]
 
+
         # 获取规则树
         rule_tree = RuleTree()
         rule_tree.build_from_rule_set(set_id, conn)
-
 
         # 使用规则树过滤频道
         filtered_channels = rule_tree.filter_channels(channels)
@@ -513,7 +513,6 @@ async def generate_txt_file(
             FROM stream_tracks
             LEFT JOIN epg_channels ON stream_tracks.name = epg_channels.display_name
             LEFT JOIN epg_sources ON epg_channels.source_id = epg_sources.id
-            WHERE stream_tracks.test_status = 1
         """)
         columns = [description[0] for description in cursor.description]
         channels = [dict(zip(columns, row)) for row in cursor.fetchall()]

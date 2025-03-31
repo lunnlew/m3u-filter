@@ -19,11 +19,11 @@ export const FilterRuleForm: React.FC<FilterRuleFormProps> = ({
   const typeValue = Form.useWatch('type', form);
 
   React.useEffect(() => {
-      if (initialValues) {
-          form.setFieldsValue(initialValues);
-      } else {
-          form.resetFields();
-      }
+    if (initialValues) {
+      form.setFieldsValue(initialValues);
+    } else {
+      form.resetFields();
+    }
   }, [initialValues, form]);
 
   return (
@@ -62,6 +62,7 @@ export const FilterRuleForm: React.FC<FilterRuleFormProps> = ({
           <Option value="group">分组匹配</Option>
           <Option value="source_name">来源名称匹配</Option>
           <Option value="bitrate">码率匹配</Option>
+          <Option value="status">可用状态匹配</Option>
         </Select>
       </Form.Item>
 
@@ -124,6 +125,11 @@ export const FilterRuleForm: React.FC<FilterRuleFormProps> = ({
                 }}
               />
             </Space.Compact>
+          ) : typeValue === 'status' ? (
+            <Select>
+              <Option value="1">可用</Option>
+              <Option value="0">不可用</Option>
+            </Select>
           ) : (
             <Input />
           )

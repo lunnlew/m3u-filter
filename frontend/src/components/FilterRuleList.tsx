@@ -61,7 +61,8 @@ const FilterRuleList: React.FC<FilterRuleListProps> = () => {
     { value: 'resolution', label: '分辨率匹配' },
     { value: 'group', label: '分组匹配' },
     { value: 'source_name', label: '来源名称匹配' },
-    { value: 'bitrate', label: '码率匹配' }
+    { value: 'bitrate', label: '码率匹配' },
+    { value: 'status', label: '可用状态匹配' }
   ];
 
   // 根据搜索关键词和选中类型过滤规则
@@ -98,7 +99,8 @@ const FilterRuleList: React.FC<FilterRuleListProps> = () => {
           'resolution': '分辨率匹配',
           'group': '分组匹配',
           'source_name': '来源名称匹配',
-          'bitrate': '码率匹配'
+          'bitrate': '码率匹配',
+          'status': '可用状态匹配'
         };
         return typeMap[type] || type;
       }

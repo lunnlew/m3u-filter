@@ -192,7 +192,7 @@ CREATE TABLE IF NOT EXISTS filter_rules (
     id             INTEGER PRIMARY KEY AUTOINCREMENT,
     name           TEXT    NOT NULL,
     type           TEXT    NOT NULL
-                           CHECK (type IN ('name', 'keyword', 'resolution', 'group', 'bitrate') ) 
+                           CHECK (type IN ('name', 'keyword', 'resolution', 'group', 'bitrate', 'status') ) 
                            DEFAULT 'name',
     pattern        TEXT    NOT NULL,
     action         TEXT    NOT NULL

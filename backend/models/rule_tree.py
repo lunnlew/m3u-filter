@@ -57,6 +57,8 @@ class RuleNode:
             field = 'resolution'
         elif rule.type == 'bitrate':
             field = 'bitrate'
+        elif rule.type == 'status':
+            field = 'test_status'
         elif rule.type == 'keyword':
             # 关键字可以匹配多个字段
             fields = ['display_name', 'group_title', 'source_name', 'stream_url']
@@ -91,6 +93,11 @@ class RuleNode:
             resolution_options = ['4k', '2k', '1080p', '720p', '576p', '480p']
             # 确保值在选项列表中
             return str_value.lower() in resolution_options and str_value.lower() == pattern.lower()
+        # 处理状态匹配
+        elif rule.type == 'status':
+            status_options = ['1', '0']
+            # 确保值在选项列表中
+            return str_value.lower() in status_options and str_value.lower() == pattern.lower()
         elif rule.type == 'bitrate' and hasattr(rule, 'min_value') and hasattr(rule, 'max_value'):
             try:
                 num_value = float(str_value)

@@ -12,12 +12,13 @@ interface RuleSetRulesFormProps {
 }
 
 const typeMap: Record<string, string> = {
-  'name': '名称匹配',
-  'keyword': '关键词匹配',
-  'resolution': '分辨率匹配',
-  'group': '分组匹配',
-  'source_name': '来源名称匹配',
-  'bitrate': '码率匹配'
+    'name': '名称匹配',
+    'keyword': '关键词匹配',
+    'resolution': '分辨率匹配',
+    'group': '分组匹配',
+    'source_name': '来源名称匹配',
+    'bitrate': '码率匹配',
+    'status': '可用状态匹配'
 };
 
 export const RuleSetRulesForm: React.FC<RuleSetRulesFormProps> = ({
