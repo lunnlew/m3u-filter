@@ -1,12 +1,13 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from routers import api_router
-from scheduler import start_scheduler
+from scheduler import start_scheduler, scheduler
 from database import init_db
 from config import PATH_LOG_ROOT, LOG_FILE, LOG_LEVEL
 import logging
 import logging.handlers
 import os
+from contextlib import asynccontextmanager
 
 # 配置日志
 def setup_logger():
@@ -41,9 +42,22 @@ def setup_logger():
 setup_logger()
 logger = logging.getLogger(__name__)
 
-def create_app():
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    init_db()
+    start_scheduler()
+    logger.info("Application started")
+    
+    yield
+    
+    # Shutdown
+    if scheduler.running:
+        scheduler.shutdown()
+        logger.info("Scheduler shutdown")
 
-    app = FastAPI()
+def create_app():
+    app = FastAPI(lifespan=lifespan)
 
     # 配置 CORS
     app.add_middleware(
@@ -56,11 +70,5 @@ def create_app():
 
     # 注册路由
     app.include_router(api_router)
-
-    # 初始化数据库
-    init_db()
-
-    # 启动调度器
-    start_scheduler()
     
     return app

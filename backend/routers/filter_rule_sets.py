@@ -13,7 +13,17 @@ import logging
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
+from typing import List, Optional, Union, Literal
+
+# 在文件顶部添加导入
+from typing import Dict, Optional
 from pydantic import BaseModel
+
+# 添加新的数据模型
+class GroupMapping(BaseModel):
+    channel_name: str
+    custom_group: str
+    rule_set_id: Optional[int] = None  # 可选，用于指定特定规则集合
 
 class FilterRuleSetResponse(BaseModel):
     id: int
@@ -387,7 +397,18 @@ async def generate_m3u_file(
 
         # 使用规则树过滤频道
         filtered_channels = rule_tree.filter_channels(channels)
-
+        
+        # 获取分组映射
+        cursor.execute(
+            "SELECT channel_name, custom_group FROM group_mappings WHERE rule_set_id = ? OR rule_set_id IS NULL",
+            (set_id,)
+        )
+        group_mappings = dict(cursor.fetchall())
+        # 在过滤频道后应用分组映射
+        for channel in filtered_channels:
+            if channel['display_name'] in group_mappings:
+                channel['group_title'] = group_mappings[channel['display_name']]
+                
         # 按分组和频道名称对频道进行分组
         grouped_channels = {}
         for channel in filtered_channels:
@@ -586,3 +607,70 @@ async def generate_txt_file(
             f.write(txt_content)
         
         return BaseResponse.success({"url_path": f"/m3u/{filename}"})
+
+@router.post("/group-mappings")
+def create_group_mapping(mapping: GroupMapping):
+    """创建分组名称映射"""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT OR REPLACE INTO group_mappings (channel_name, custom_group, rule_set_id) VALUES (?, ?, ?)",
+            (mapping.channel_name, mapping.custom_group, mapping.rule_set_id)
+        )
+        conn.commit()
+        return BaseResponse.success()
+
+@router.get("/group-mappings")
+def get_group_mappings(rule_set_id: Optional[int] = None):
+    """获取分组名称映射"""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        if rule_set_id:
+            cursor.execute(
+                "SELECT channel_name, custom_group FROM group_mappings WHERE rule_set_id = ? OR rule_set_id IS NULL",
+                (rule_set_id,)
+            )
+        else:
+            cursor.execute("SELECT channel_name, custom_group FROM group_mappings")
+        return BaseResponse.success(data=dict(cursor.fetchall()))
+
+@router.delete("/group-mappings")
+def delete_group_mapping(mapping: GroupMapping):
+    """删除分组映射"""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "DELETE FROM group_mappings WHERE channel_name=? AND rule_set_id=?",
+            (mapping.channel_name, mapping.rule_set_id)
+        )
+        if cursor.rowcount == 0:
+            return BaseResponse.error(message="Mapping not found", code=404)
+        conn.commit()
+        return BaseResponse.success()
+
+
+@router.post("/group-mappings/batch")
+def batch_update_group_mappings(mappings: List[GroupMapping]):
+    """批量更新分组映射"""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        for mapping in mappings:
+            cursor.execute(
+                "INSERT OR REPLACE INTO group_mappings (channel_name, custom_group, rule_set_id) VALUES (?, ?, ?)",
+                (mapping.channel_name, mapping.custom_group, mapping.rule_set_id)
+            )
+        conn.commit()
+        return BaseResponse.success()
+
+@router.delete("/group-mappings/batch")
+def batch_delete_group_mappings(mappings: List[GroupMapping]):
+    """批量删除分组映射"""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        for mapping in mappings:
+            cursor.execute(
+                "DELETE FROM group_mappings WHERE channel_name=? AND rule_set_id=?",
+                (mapping.channel_name, mapping.rule_set_id)
+            )
+        conn.commit()
+        return BaseResponse.success()

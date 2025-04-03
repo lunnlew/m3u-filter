@@ -25,3 +25,9 @@ export interface FilterRuleSet {
 export interface GenerateM3UResponse {
   url_path: string;
 }
+
+export interface GroupMapping {
+  channel_name: string;
+  custom_group: string;
+  rule_set_id?: number;
+}

@@ -17,3 +17,104 @@
 .filter-item {
     margin-bottom: 8px;
 }
+
+.group-mapping-container {
+    margin-top: 16px;
+    padding: 16px;
+    background-color: #fff;
+    border-radius: 4px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.group-mapping-row {
+    display: flex;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.group-mapping-input {
+    flex: 1;
+    margin-right: 8px;
+}
+
+.group-mapping-container .ant-card-head {
+  background-color: #f9f9f9;
+  border-bottom: 1px solid #e8e8e8;
+}
+
+.group-mapping-container .ant-card-body {
+  padding: 16px;
+}
+
+.group-mapping-container .ant-form-item {
+  margin-bottom: 8px;
+}
+
+.group-mapping-container .ant-btn-danger {
+  margin-left: 8px;
+}
+
+.group-mapping-container .ant-btn-dashed {
+  margin-bottom: 16px;
+}
+
+/* 新增表单容器样式 */
+.group-mapping-form {
+  margin-top: 24px;
+  border: 1px solid #e8e8e8;
+  border-radius: 4px;
+  padding: 16px;
+  background-color: #fff;
+}
+
+/* 表单标题样式 */
+.group-mapping-title {
+  font-size: 16px;
+  font-weight: 500;
+  margin-bottom: 16px;
+  color: #333;
+}
+
+/* 表单行样式 */
+.group-mapping-form-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+  align-items: center;
+}
+
+/* 输入框样式 */
+.group-mapping-input-field {
+  flex: 1;
+}
+
+/* 按钮容器样式 */
+.group-mapping-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+/* 添加按钮样式 */
+.group-mapping-add-btn {
+  margin-bottom: 16px;
+}
+
+/* 删除按钮悬停效果 */
+.group-mapping-delete-btn:hover {
+  color: #ff4d4f;
+  border-color: #ff4d4f;
+}
+
+/* 响应式调整 */
+@media (max-width: 768px) {
+  .group-mapping-form-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .group-mapping-input-field {
+    width: 100%;
+  }
+}

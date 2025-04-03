@@ -37,9 +37,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY --from=builder /app/dist/m3u_filter_backend /app/m3u-filter
 COPY --from=frontend-builder /app/dist ./web
 
+# 设置时区为中国时区
+ENV TZ=Asia/Shanghai
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+
 # 设置环境变量g
 ENV PYTHONUNBUFFERED=1 \
-    TZ=Asia/Shanghai \
     M3U_FILTER_LOG_LEVEL=INFO \
     M3U_FILTER_DATA_ROOT=/app/data \
     M3U_FILTER_WEB_ROOT=/app/web \

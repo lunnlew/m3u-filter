@@ -14,11 +14,10 @@ export const useLogin = (): {
   isPending: boolean;
 } => {
   const navigate: NavigateFunction = useNavigate();
-  type LoginResponse = string;
-  return useMutation<LoginResponse, Error, LoginFormValues>({
+  return useMutation<{ token: string }, Error, LoginFormValues>({
     mutationFn: loginUser,
-    onSuccess: (token) => {
-      localStorage.setItem('authToken', token);
+    onSuccess: (result) => {
+      localStorage.setItem('authToken', result.token);
       navigate('/', { replace: true });
     },
     onError: (error) => {

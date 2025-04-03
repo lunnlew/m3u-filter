@@ -35,7 +35,7 @@ export const useEPGSourceDelete = () => {
 export const useEPGSourceSync = () => {
   const queryClient = useQueryClient();
 
-  return useMutation<ApiResponse<any>, unknown, number>({
+  return useMutation<any, unknown, number>({
     mutationFn: syncEPGSource,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['epg-sources'] });

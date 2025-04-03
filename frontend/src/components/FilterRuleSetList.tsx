@@ -10,6 +10,7 @@ import { useSiteConfig } from '../hooks/siteConfig';
 import { FilterRuleSetForm } from './FilterRuleSetForm';
 import './FilterRuleSetList.css';
 import { RuleSetRulesForm } from './RuleSetRulesForm';
+import { GroupMappingForm } from './GroupMappingForm';
 
 export const FilterRuleSetList = () => {
     const { message } = App.useApp();
@@ -147,6 +148,10 @@ export const FilterRuleSetList = () => {
         });
     };
 
+    // 新增状态控制分组映射Modal
+    const [isGroupMappingModalVisible, setIsGroupMappingModalVisible] = useState(false);
+    
+    // 修改操作列中的分组映射按钮点击事件
     const columns = [
         { title: '名称', dataIndex: 'name', key: 'name' },
         { title: '描述', dataIndex: 'description', key: 'description' },
@@ -192,6 +197,16 @@ export const FilterRuleSetList = () => {
                     {/* 新增TXT生成按钮 */}
                     <Button type="link" onClick={() => handleGenerateM3U(record.id)}>生成M3U</Button>
                     <Button type="link" onClick={() => handleGenerateTXT(record.id)}>生成TXT</Button>
+                    {/* 新增分组映射按钮 */}
+                    <Button 
+                        type="link" 
+                        onClick={() => {
+                            setSelectedRuleSetId(record.id);
+                            setIsGroupMappingModalVisible(true);
+                        }}
+                    >
+                        分组映射
+                    </Button>
                     <Button type="link" danger onClick={() => handleDelete(record.id)}>删除</Button>
                 </Space>
             )
@@ -322,6 +337,25 @@ export const FilterRuleSetList = () => {
                     }}
                     initialValues={editingId ? ruleSets.find(set => set.id === editingId) : undefined}
                 />
+            </Modal>
+            
+            {/* 分组映射Modal */}
+            <Modal
+                title="分组映射配置"
+                open={isGroupMappingModalVisible}
+                onCancel={() => setIsGroupMappingModalVisible(false)}
+                footer={null}
+                width={800}
+                destroyOnClose
+            >
+                {selectedRuleSetId && (
+                    <div className="group-mapping-container">
+                        <GroupMappingForm 
+                            ruleSetId={selectedRuleSetId}
+                            onCancel={() => setIsGroupMappingModalVisible(false)}
+                        />
+                    </div>
+                )}
             </Modal>
 
             <Modal

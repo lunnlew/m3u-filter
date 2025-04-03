@@ -1,9 +1,9 @@
-import { request } from '../utils/request';
 import type { EPGChannel } from '../types/epg';
 import { ApiResponse } from '@/types/api';
 import { GenerateEPGResponse } from '@/hooks/epgChannels';
 
 import { EPGChannelFilters } from '../hooks/epgChannels';
+import request from '@/utils/request';
 
 export const fetchEPGChannels = async (filters?: EPGChannelFilters): Promise<EPGChannel[]> => {
   // 构建查询参数
@@ -14,16 +14,16 @@ export const fetchEPGChannels = async (filters?: EPGChannelFilters): Promise<EPG
     if (filters.category) params.category = filters.category;
   }
 
-  const response = await request<EPGChannel[]>({
+  const response = await request<ApiResponse<EPGChannel[]>>({
     method: 'get',
     url: '/epg-channels',
     params
   });
-  return response.data;
+  return response.data.data;
 };
 
-export const createOrUpdateEPGChannel = async (values: EPGChannel): Promise<ApiResponse<EPGChannel>> => {
-  const response = await request<ApiResponse<EPGChannel>>({
+export const createOrUpdateEPGChannel = async (values: EPGChannel): Promise<ApiResponse> => {
+  const response = await request<ApiResponse>({
     method: values.id ? 'put' : 'post',
     url: values.id ? `/epg-channels/${values.id}` : '/epg-channels',
     data: values
@@ -31,16 +31,16 @@ export const createOrUpdateEPGChannel = async (values: EPGChannel): Promise<ApiR
   return response.data;
 };
 
-export const deleteEPGChannel = async (id: number): Promise<ApiResponse<EPGChannel>> => {
-  const response = await request<ApiResponse<EPGChannel>>({
+export const deleteEPGChannel = async (id: number): Promise<ApiResponse> => {
+  const response = await request<ApiResponse>({
     method: 'delete',
     url: `/epg-channels/${id}`
   });
   return response.data;
 };
 
-export const clearAllEPGChannels = async (): Promise<ApiResponse<EPGChannel>> => {
-  const response = await request<ApiResponse<EPGChannel>>({
+export const clearAllEPGChannels = async (): Promise<ApiResponse> => {
+  const response = await request<ApiResponse>({
     method: 'delete',
     url: '/epg-channels-clear-all'
   });
@@ -48,9 +48,9 @@ export const clearAllEPGChannels = async (): Promise<ApiResponse<EPGChannel>> =>
 };
 
 export const generateEPGXML = async (): Promise<GenerateEPGResponse> => {
-  const response = await request<GenerateEPGResponse>({
+  const response = await request<ApiResponse<GenerateEPGResponse>>({
     method: 'post',
     url: '/epg-channels/export-xml'
   });
-  return response.data;
+  return response.data.data;
 };

@@ -2,7 +2,7 @@ import sqlite3
 from queue import Queue
 from contextlib import contextmanager
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from config import DATABASE_FILE
 
 import logging
@@ -82,11 +82,16 @@ def init_db():
                     if c.fetchone()[0] > 0:
                         logger.warning(f"Skipping version {version} as it was already partially applied")
                         continue
-                        
+                    
                     c.executescript(script)
+                    
+                    # 使用带时区的时间，固定为UTC+8
+                    tz = timezone(timedelta(hours=8))
+                    now = datetime.now(tz).isoformat()
+                    
                     c.execute(
                         "INSERT INTO db_version (version, applied_at) VALUES (?, ?)",
-                        (version, datetime.now().isoformat())
+                        (version, now)
                     )
                     conn.commit()
                     logger.info(f"Successfully applied database upgrade version {version}")

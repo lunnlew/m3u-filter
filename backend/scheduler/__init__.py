@@ -128,9 +128,22 @@ def init_scheduler():
 
 def start_scheduler():
     """启动调度器"""
-    
+    if scheduler.running:
+        logger.info("Scheduler is already running, skipping initialization")
+        return
+        
+    logger.info("Initializing scheduler...")
     init_scheduler()
+    
     scheduler.start()
+    
+    # 添加日志记录所有已配置的任务
+    jobs = scheduler.get_jobs()
+    for job in jobs:
+        next_run = job.next_run_time.isoformat() if job.next_run_time else "Not scheduled"
+        logger.info(f"Scheduled job: {job.name}, next run: {next_run}")
+    
+    logger.info("Scheduler started successfully")
 
 def update_source_schedule(source_id: int):
     """更新指定数据源的同步计划"""

@@ -1,6 +1,6 @@
-import axios, { AxiosRequestConfig, AxiosResponse } from 'axios';
+import axios, { AxiosResponse } from 'axios';
 import { App } from 'antd';
-import { ApiResponse } from '@/types/api';
+
 
 const getBaseURL = () => {
   // 判断是否在 Tauri 环境中运行
@@ -10,13 +10,13 @@ const getBaseURL = () => {
   return '/api';
 };
 
-const _request = axios.create({
+const request = axios.create({
   baseURL: getBaseURL(),
   timeout: 30000,
 });
 
 // 请求拦截器
-_request.interceptors.request.use(
+request.interceptors.request.use(
   (config) => {
     return config;
   },
@@ -26,9 +26,9 @@ _request.interceptors.request.use(
 );
 
 // 响应拦截器
-_request.interceptors.response.use(
+request.interceptors.response.use(
   <T>(response: AxiosResponse<T>) => {
-    return response.data;
+    return response;
   },
   (error) => {
     const { message } = App.useApp();
@@ -38,10 +38,5 @@ _request.interceptors.response.use(
   }
 );
 
-export const request = <T>(config: AxiosRequestConfig): Promise<ApiResponse<T>> => {
-  return _request(config).then((response: AxiosResponse) => {
-    return response as unknown as ApiResponse<T>;
-  });
-};
 
-export default _request;
+export default request;

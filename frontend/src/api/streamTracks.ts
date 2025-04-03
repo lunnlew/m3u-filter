@@ -1,5 +1,6 @@
-import { request } from '../utils/request';
+import request from '@/utils/request';
 import type { StreamTrack, PaginatedStreamTracks } from '../types/stream';
+import { ApiResponse } from '@/types/api';
 
 interface StreamTracksParams {
   group_title?: string;
@@ -9,28 +10,28 @@ interface StreamTracksParams {
 }
 
 export const fetchStreamTracks = async (params?: StreamTracksParams): Promise<PaginatedStreamTracks[]> => {
-  const response = await request<PaginatedStreamTracks[]>({
+  const response = await request<ApiResponse<PaginatedStreamTracks[]>>({
     method: 'get',
     url: '/stream-tracks',
     params
   });
-  return response.data;
+  return response.data.data;
 };
 
 export const fetchStreamTrack = async (id: number): Promise<StreamTrack> => {
-  const response = await request<StreamTrack>({
+  const response = await request<ApiResponse<StreamTrack>>({
     method: 'get',
     url: `/stream-tracks/${id}`
   });
-  return response.data;
+  return response.data.data;
 };
 
 export const deleteStreamTrack = async (id: number): Promise<any> => {
-  const response = await request<any>({
+  const response = await request<ApiResponse<any>>({
     method: 'delete',
     url: `/stream-tracks/${id}`
   });
-  return response.data;
+  return response.data.data;
 };
 
 export interface TestResponse {
@@ -38,7 +39,7 @@ export interface TestResponse {
 }
 
 export const testAllStreamTracks = async (): Promise<TestResponse> => {
-  const response = await request<TestResponse>({
+  const response = await request<ApiResponse<TestResponse>>({
     method: 'post',
     url: '/stream-tracks/test-all'
   });
@@ -50,8 +51,8 @@ export interface StreamTrackTestResponse {
   message: string;
 }
 
-export const testStreamTrack = async (id: number): Promise<StreamTrackTestResponse> => {
-  const response = await request<StreamTrackTestResponse>({
+export const testStreamTrack = async (id: number): Promise<ApiResponse> => {
+  const response = await request<ApiResponse>({
     method: 'post',
     url: `/stream-tracks/${id}/test`
   });

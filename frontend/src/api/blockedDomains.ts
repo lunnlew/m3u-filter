@@ -1,4 +1,5 @@
-import { request } from '../utils/request';
+import { ApiResponse } from '@/types/api';
+import request from '@/utils/request';
 
 export interface BlockedDomain {
   domain: string;
@@ -20,7 +21,7 @@ export const fetchBlockedDomains = async (
   pageSize: number = 10,
   keyword?: string
 ): Promise<BlockedDomainsResponse> => {
-  const response = await request<BlockedDomainsResponse>({
+  const response = await request<ApiResponse<BlockedDomainsResponse>>({
     method: 'get',
     url: '/blocked-domains',
     params: {
@@ -29,13 +30,12 @@ export const fetchBlockedDomains = async (
       keyword
     }
   });
-  return response.data;
+  return response.data.data;
 };
 
 export const removeBlockedDomain = async (domain: string): Promise<void> => {
-  const response = await request<void>({
+  await request<ApiResponse<void>>({
     method: 'delete',
     url: `/blocked-domains/${domain}`
   });
-  return response.data;
 };
