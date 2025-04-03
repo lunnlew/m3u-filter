@@ -156,6 +156,9 @@ async def record_domain_failure(url: str, error: str) -> bool:
     domain_failures[domain_key] = valid_failures
     recent_failures = len(valid_failures)
     
+    # 初始化总失败次数变量
+    total_failures = recent_failures  # 确保变量在所有路径中都有定义
+    
     # 更新待处理队列，使用实际的失败次数
     try:
         with get_db_connection() as conn:
