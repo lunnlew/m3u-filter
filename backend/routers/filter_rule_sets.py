@@ -452,11 +452,6 @@ async def generate_m3u_file(
             )
             final_channels.extend(sorted_channels[:2])  # 只保留前2个
 
-
-        # 使用规则集合名称作为文件名
-        filename = f"{rule_set[1]}"
-        filename = ''.join(c for c in filename if c.isalnum() or c in ('_', '-', '.'))
-        
         # 获取排序模板
         cursor.execute("""
             SELECT name, group_orders
@@ -477,6 +472,10 @@ async def generate_m3u_file(
             except json.JSONDecodeError:
                 logger.error(f"Invalid JSON format in sort template: {template_name}")
                 continue
+
+        # 使用规则集合名称作为文件名
+        filename = f"{rule_set[1]}"
+        filename = ''.join(c for c in filename if c.isalnum() or c in ('_', '-', '.'))
         
         # 使用M3UGenerator生成m3u文件
         header_info = {
@@ -578,6 +577,7 @@ async def generate_txt_file(
                 stream_tracks.tvg_logo,
                 stream_tracks.tvg_language,
                 stream_tracks.group_title,
+                stream_tracks.test_status,
                 stream_tracks.catchup,
                 stream_tracks.catchup_source,
                 stream_tracks.download_speed,
@@ -610,7 +610,6 @@ async def generate_txt_file(
         rule_tree = RuleTree()
         rule_tree.build_from_rule_set(set_id, conn)
 
-
         # 使用规则树过滤频道
         filtered_channels = rule_tree.filter_channels(channels)
         
@@ -635,12 +634,11 @@ async def generate_txt_file(
             HAVING priority = MIN(priority)
         """, (set_id, set_id))
         group_mappings = dict(cursor.fetchall())
-        
         # 在过滤频道后应用分组映射
         for channel in filtered_channels:
             if channel['display_name'] in group_mappings:
                 channel['group_title'] = group_mappings[channel['display_name']]
-
+                
         # 按分组和频道名称对频道进行分组
         grouped_channels = {}
         for channel in filtered_channels:
@@ -666,11 +664,6 @@ async def generate_txt_file(
             )
             final_channels.extend(sorted_channels[:2])  # 只保留前2个
 
-
-        # 使用规则集合名称作为文件名
-        filename = f"{rule_set[1]}"
-        filename = ''.join(c for c in filename if c.isalnum() or c in ('_', '-', '.'))
-        
         # 获取排序模板
         cursor.execute("""
             SELECT name, group_orders
@@ -691,7 +684,12 @@ async def generate_txt_file(
             except json.JSONDecodeError:
                 logger.error(f"Invalid JSON format in sort template: {template_name}")
                 continue
-        
+
+
+        # 使用规则集合名称作为文件名
+        filename = f"{rule_set[1]}"
+        filename = ''.join(c for c in filename if c.isalnum() or c in ('_', '-', '.'))
+
         # 使用M3UGenerator生成TXT文件
         generator = M3UGenerator()
         txt_content, filename = generator.generate_txt(final_channels, [filename], sort_by, group_order, sort_templates)
