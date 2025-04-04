@@ -172,6 +172,7 @@ const EPGPrograms = () => {
         open={detailModalVisible}
         onCancel={() => setDetailModalVisible(false)}
         footer={null}
+        destroyOnClose
       >
         {selectedProgram && (
           <div>

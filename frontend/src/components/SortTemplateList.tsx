@@ -108,6 +108,7 @@ const SortTemplateList: React.FC = () => {
         open={isModalVisible}
         onCancel={handleModalClose}
         footer={null}
+        destroyOnClose
       >
         <SortTemplateForm
           template={editingTemplate}

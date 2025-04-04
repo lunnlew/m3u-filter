@@ -211,6 +211,7 @@ export const GroupMappingForm: React.FC<GroupMappingFormProps> = ({ ruleSetId, o
           setTemplateName('');
           setTemplateDescription('');
         }}
+        destroyOnClose
       >
         <Form layout="vertical">
           <Form.Item label="模板名称" required>

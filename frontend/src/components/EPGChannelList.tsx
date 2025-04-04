@@ -258,6 +258,7 @@ export const EPGChannelList: React.FC = () => {
         open={isModalVisible}
         onCancel={() => setIsModalVisible(false)}
         footer={null}
+        destroyOnClose
       >
         <EPGChannelForm
           initialValues={editingChannel || undefined}

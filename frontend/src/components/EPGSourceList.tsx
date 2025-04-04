@@ -164,6 +164,7 @@ export const EPGSourceList: React.FC = () => {
         open={isModalVisible}
         onCancel={() => setIsModalVisible(false)}
         footer={null}
+        destroyOnClose
       >
         <EPGSourceForm
           initialValues={editingSource || undefined}

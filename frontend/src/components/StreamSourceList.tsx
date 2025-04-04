@@ -216,6 +216,7 @@ export const StreamSourceList: React.FC = () => {
           setEditingSource(null);
         }}
         footer={null}
+        destroyOnClose
       >
         <StreamSourceForm
           initialValues={editingSource || undefined}

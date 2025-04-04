@@ -226,6 +226,7 @@ const FilterRuleList: React.FC<FilterRuleListProps> = () => {
         open={isModalVisible}
         onCancel={() => setIsModalVisible(false)}
         footer={null}
+        destroyOnClose
       >
         {isModalVisible && (
           <FilterRuleForm

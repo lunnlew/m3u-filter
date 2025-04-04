@@ -21,7 +21,22 @@ class RuleNode:
         # 如果没有规则和子节点，默认返回True
         if not self.rules and not self.children:
             return True
-
+            
+        # 预测试规则：状态、分辨率、比特率等可以快速判断的规则
+        pre_test_rules = [r for r in self.rules if r.type in ['status', 'resolution', 'bitrate']]
+        
+        # 对于AND逻辑，如果预测试规则失败则直接返回False
+        if self.logic_type == 'AND' and pre_test_rules:
+            for rule in pre_test_rules:
+                if not self._evaluate_rule(rule, channel):
+                    return False
+        
+        # 对于OR逻辑，如果预测试规则成功则直接返回True
+        elif self.logic_type == 'OR' and pre_test_rules:
+            for rule in pre_test_rules:
+                if self._evaluate_rule(rule, channel):
+                    return True
+            
         # 评估所有规则
         rule_results = [self._evaluate_rule(rule, channel) for rule in self.rules]
         

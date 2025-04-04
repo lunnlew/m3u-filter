@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Tuple
 from database import get_db_connection
 from models import FilterRuleSet, FilterRuleSetMapping, RuleTree
 import os
@@ -335,6 +335,143 @@ def remove_child_set(parent_set_id: int, child_set_id: int):
         conn.commit()
         return BaseResponse.success()
 
+def _get_filtered_channels(set_id: int, conn) -> Tuple[List[dict], List[dict[str, str]], Dict[str, List[str]]]:
+    ""
+    """
+    获取过滤后的频道列表（公共函数）
+    返回处理后的频道列表，包括分组映射和排序后的结果
+    """
+    cursor = conn.cursor()
+    # 获取规则集合
+    cursor.execute("SELECT id, name, enabled, logic_type FROM filter_rule_sets WHERE id = ?", (set_id,))
+    rule_set = cursor.fetchone()
+    if not rule_set:
+        raise HTTPException(status_code=404, detail="规则集合不存在")
+    
+    if not rule_set[2]:  # enabled
+        raise HTTPException(status_code=400, detail="Rule set is disabled")
+    
+    # 获取所有频道
+    cursor.execute("""
+        SELECT
+            stream_tracks.id,
+            stream_tracks.name as display_name,
+            stream_tracks.url as stream_url,
+            stream_tracks.tvg_name,
+            stream_tracks.tvg_logo,
+            stream_tracks.tvg_language,
+            stream_tracks.group_title,
+            stream_tracks.test_status,
+            stream_tracks.catchup,
+            stream_tracks.catchup_source,
+            stream_tracks.download_speed,
+            stream_tracks.resolution,
+            stream_tracks.bitrate,
+            stream_tracks.quality_score,
+            epg_channels.channel_id,
+            epg_channels.language,
+            epg_channels.category,
+            COALESCE(
+                epg_channels.local_logo_path,
+                epg_channels.logo_url,
+                (SELECT local_logo_path FROM default_channel_logos 
+                WHERE channel_name = stream_tracks.name 
+                ORDER BY priority DESC LIMIT 1),
+                (SELECT logo_url FROM default_channel_logos 
+                WHERE channel_name = stream_tracks.name 
+                ORDER BY priority DESC LIMIT 1)
+            ) as logo_url,
+            epg_sources.name AS source_name,
+            epg_sources.id AS source_id
+        FROM stream_tracks
+        LEFT JOIN epg_channels ON stream_tracks.name = epg_channels.display_name
+        LEFT JOIN epg_sources ON epg_channels.source_id = epg_sources.id
+    """)
+    columns = [description[0] for description in cursor.description]
+    channels = [dict(zip(columns, row)) for row in cursor.fetchall()]
+
+    # 获取规则树
+    rule_tree = RuleTree()
+    rule_tree.build_from_rule_set(set_id, conn)
+
+    # 使用规则树过滤频道
+    filtered_channels = rule_tree.filter_channels(channels)
+    
+    # 获取分组映射和模板
+    cursor.execute("""
+        SELECT channel_name, custom_group 
+        FROM (
+            SELECT channel_name, custom_group, 1 as priority
+            FROM group_mappings
+            WHERE rule_set_id = ?
+            UNION ALL
+            SELECT gmt.channel_name, gmt.custom_group, 2 as priority
+            FROM group_mapping_template_items gmt
+            INNER JOIN group_mapping_templates t ON gmt.template_id = t.id
+            WHERE t.rule_set_id = ?
+            UNION ALL
+            SELECT channel_name, custom_group, 3 as priority
+            FROM group_mappings
+            WHERE rule_set_id IS NULL
+        ) combined
+        GROUP BY channel_name
+        HAVING priority = MIN(priority)
+    """, (set_id, set_id))
+    group_mappings = dict(cursor.fetchall())
+    
+    # 应用分组映射
+    for channel in filtered_channels:
+        if channel['display_name'] in group_mappings:
+            channel['group_title'] = group_mappings[channel['display_name']]
+            
+    # 按分组和频道名称对频道进行分组
+    grouped_channels = {}
+    for channel in filtered_channels:
+        group = channel.get('group_title', 'Unknown')
+        name = channel.get('display_name', '')
+        key = (group, name)
+        if key not in grouped_channels:
+            grouped_channels[key] = []
+        grouped_channels[key].append(channel)
+
+    # 对每个分组下的同名频道按质量评分、清晰度和下载速度排序并只保留前2个
+    final_channels = []
+    for (group, name), channels in grouped_channels.items():
+        sorted_channels = sorted(
+            channels, 
+            key=lambda x: (
+                float(x.get('quality_score', 0) or 0),
+                _get_resolution_score(x.get('resolution', '')),
+                float(x.get('download_speed', 0) or 0)
+            ), 
+            reverse=True
+        )
+        for channel in sorted_channels[:2]:
+            channel['group_title'] = group
+            final_channels.append(channel)
+
+    cursor.execute("""
+        SELECT name, group_orders
+        FROM sort_templates
+    """)
+    sort_templates_raw = cursor.fetchall()
+    sort_templates = {}
+
+    for template_name, group_orders in sort_templates_raw:
+        try:
+            # 解析JSON格式的group_orders
+            orders = json.loads(group_orders)
+            # 合并到sort_templates中
+            for group_name, channels in orders.items():
+                if group_name not in sort_templates:
+                    sort_templates[group_name] = []
+                sort_templates[group_name].extend(channels)
+        except json.JSONDecodeError:
+            logger.error(f"Invalid JSON format in sort template: {template_name}")
+            continue
+    
+    return rule_set, final_channels, sort_templates
+
 @router.post("/filter-rule-sets/{set_id}/generate-m3u")
 async def generate_m3u_file(
     set_id: int,
@@ -343,136 +480,8 @@ async def generate_m3u_file(
 ):
     """根据规则集合生成M3U文件"""
     with get_db_connection() as conn:
-        cursor = conn.cursor()
-        # 获取规则集合
-        cursor.execute("SELECT id, name, enabled, logic_type FROM filter_rule_sets WHERE id = ?", (set_id,))
-        rule_set = cursor.fetchone()
-        if not rule_set:
-            return BaseResponse.error(message="规则集合不存在", code=404)
+        rule_set, final_channels, sort_templates = _get_filtered_channels(set_id, conn)
         
-        if not rule_set[2]:  # enabled
-            raise HTTPException(status_code=400, detail="Rule set is disabled")
-        
-        # 获取所有频道
-        # 修改获取频道的SQL查询，添加download_speed字段
-        cursor.execute("""
-            SELECT
-                stream_tracks.id,
-                stream_tracks.name as display_name,
-                stream_tracks.url as stream_url,
-                stream_tracks.tvg_name,
-                stream_tracks.tvg_logo,
-                stream_tracks.tvg_language,
-                stream_tracks.group_title,
-                stream_tracks.test_status,
-                stream_tracks.catchup,
-                stream_tracks.catchup_source,
-                stream_tracks.download_speed,
-                stream_tracks.resolution,
-                stream_tracks.bitrate,
-                stream_tracks.quality_score,
-                epg_channels.channel_id,
-                epg_channels.language,
-                epg_channels.category,
-                COALESCE(
-                    epg_channels.local_logo_path,
-                    epg_channels.logo_url,
-                    (SELECT local_logo_path FROM default_channel_logos 
-                    WHERE channel_name = stream_tracks.name 
-                    ORDER BY priority DESC LIMIT 1),
-                    (SELECT logo_url FROM default_channel_logos 
-                    WHERE channel_name = stream_tracks.name 
-                    ORDER BY priority DESC LIMIT 1)
-                ) as logo_url,
-                epg_sources.name AS source_name,
-                epg_sources.id AS source_id
-            FROM stream_tracks
-            LEFT JOIN epg_channels ON stream_tracks.name = epg_channels.display_name
-            LEFT JOIN epg_sources ON epg_channels.source_id = epg_sources.id
-        """)
-        columns = [description[0] for description in cursor.description]
-        channels = [dict(zip(columns, row)) for row in cursor.fetchall()]
-
-
-        # 获取规则树
-        rule_tree = RuleTree()
-        rule_tree.build_from_rule_set(set_id, conn)
-
-        # 使用规则树过滤频道
-        filtered_channels = rule_tree.filter_channels(channels)
-        
-        # 获取分组映射和模板
-        cursor.execute("""
-            SELECT channel_name, custom_group 
-            FROM (
-                SELECT channel_name, custom_group, 1 as priority
-                FROM group_mappings
-                WHERE rule_set_id = ?
-                UNION ALL
-                SELECT gmt.channel_name, gmt.custom_group, 2 as priority
-                FROM group_mapping_template_items gmt
-                INNER JOIN group_mapping_templates t ON gmt.template_id = t.id
-                WHERE t.rule_set_id = ?
-                UNION ALL
-                SELECT channel_name, custom_group, 3 as priority
-                FROM group_mappings
-                WHERE rule_set_id IS NULL
-            ) combined
-            GROUP BY channel_name
-            HAVING priority = MIN(priority)
-        """, (set_id, set_id))
-        group_mappings = dict(cursor.fetchall())
-        # 在过滤频道后应用分组映射
-        for channel in filtered_channels:
-            if channel['display_name'] in group_mappings:
-                channel['group_title'] = group_mappings[channel['display_name']]
-                
-        # 按分组和频道名称对频道进行分组
-        grouped_channels = {}
-        for channel in filtered_channels:
-            group = channel.get('group_title', 'Unknown')
-            name = channel.get('display_name', '')
-            key = (group, name)  # 使用分组和名称的元组作为键
-            if key not in grouped_channels:
-                grouped_channels[key] = []
-            grouped_channels[key].append(channel)
-
-        # 对每个分组下的同名频道按质量评分、清晰度和下载速度排序并只保留前2个
-        final_channels = []
-        for (group, name), channels in grouped_channels.items():
-            # 多级排序：首先按质量评分排序，然后按清晰度（分辨率），最后按下载速度
-            sorted_channels = sorted(
-                channels, 
-                key=lambda x: (
-                    float(x.get('quality_score', 0) or 0),  # 质量评分
-                    _get_resolution_score(x.get('resolution', '')),  # 清晰度评分
-                    float(x.get('download_speed', 0) or 0)  # 下载速度
-                ), 
-                reverse=True  # 降序排列
-            )
-            final_channels.extend(sorted_channels[:2])  # 只保留前2个
-
-        # 获取排序模板
-        cursor.execute("""
-            SELECT name, group_orders
-            FROM sort_templates
-        """)
-        sort_templates_raw = cursor.fetchall()
-        sort_templates = {}
-
-        for template_name, group_orders in sort_templates_raw:
-            try:
-                # 解析JSON格式的group_orders
-                orders = json.loads(group_orders)
-                # 合并到sort_templates中
-                for group_name, channels in orders.items():
-                    if group_name not in sort_templates:
-                        sort_templates[group_name] = []
-                    sort_templates[group_name].extend(channels)
-            except json.JSONDecodeError:
-                logger.error(f"Invalid JSON format in sort template: {template_name}")
-                continue
-
         # 使用规则集合名称作为文件名
         filename = f"{rule_set[1]}"
         filename = ''.join(c for c in filename if c.isalnum() or c in ('_', '-', '.'))
@@ -556,136 +565,8 @@ async def generate_txt_file(
 ):
     """根据规则集合生成TXT风格文件"""
     with get_db_connection() as conn:
-        cursor = conn.cursor()
-        # 获取规则集合
-        cursor.execute("SELECT id, name, enabled, logic_type FROM filter_rule_sets WHERE id = ?", (set_id,))
-        rule_set = cursor.fetchone()
-        if not rule_set:
-            return BaseResponse.error(message="规则集合不存在", code=404)
+        rule_set, final_channels, sort_templates = _get_filtered_channels(set_id, conn)
         
-        if not rule_set[2]:  # enabled
-            raise HTTPException(status_code=400, detail="Rule set is disabled")
-        
-        # 获取所有频道
-        # 修改获取频道的SQL查询，添加download_speed字段
-        cursor.execute("""
-            SELECT
-                stream_tracks.id,
-                stream_tracks.name as display_name,
-                stream_tracks.url as stream_url,
-                stream_tracks.tvg_name,
-                stream_tracks.tvg_logo,
-                stream_tracks.tvg_language,
-                stream_tracks.group_title,
-                stream_tracks.test_status,
-                stream_tracks.catchup,
-                stream_tracks.catchup_source,
-                stream_tracks.download_speed,
-                stream_tracks.resolution,
-                stream_tracks.bitrate,
-                stream_tracks.quality_score,
-                epg_channels.channel_id,
-                epg_channels.language,
-                epg_channels.category,
-                COALESCE(
-                    epg_channels.local_logo_path,
-                    epg_channels.logo_url,
-                    (SELECT local_logo_path FROM default_channel_logos 
-                    WHERE channel_name = stream_tracks.name 
-                    ORDER BY priority DESC LIMIT 1),
-                    (SELECT logo_url FROM default_channel_logos 
-                    WHERE channel_name = stream_tracks.name 
-                    ORDER BY priority DESC LIMIT 1)
-                ) as logo_url,
-                epg_sources.name AS source_name,
-                epg_sources.id AS source_id
-            FROM stream_tracks
-            LEFT JOIN epg_channels ON stream_tracks.name = epg_channels.display_name
-            LEFT JOIN epg_sources ON epg_channels.source_id = epg_sources.id
-        """)
-        columns = [description[0] for description in cursor.description]
-        channels = [dict(zip(columns, row)) for row in cursor.fetchall()]
-
-        # 获取规则树
-        rule_tree = RuleTree()
-        rule_tree.build_from_rule_set(set_id, conn)
-
-        # 使用规则树过滤频道
-        filtered_channels = rule_tree.filter_channels(channels)
-        
-        # 获取分组映射和模板
-        cursor.execute("""
-            SELECT channel_name, custom_group 
-            FROM (
-                SELECT channel_name, custom_group, 1 as priority
-                FROM group_mappings
-                WHERE rule_set_id = ?
-                UNION ALL
-                SELECT gmt.channel_name, gmt.custom_group, 2 as priority
-                FROM group_mapping_template_items gmt
-                INNER JOIN group_mapping_templates t ON gmt.template_id = t.id
-                WHERE t.rule_set_id = ?
-                UNION ALL
-                SELECT channel_name, custom_group, 3 as priority
-                FROM group_mappings
-                WHERE rule_set_id IS NULL
-            ) combined
-            GROUP BY channel_name
-            HAVING priority = MIN(priority)
-        """, (set_id, set_id))
-        group_mappings = dict(cursor.fetchall())
-        # 在过滤频道后应用分组映射
-        for channel in filtered_channels:
-            if channel['display_name'] in group_mappings:
-                channel['group_title'] = group_mappings[channel['display_name']]
-                
-        # 按分组和频道名称对频道进行分组
-        grouped_channels = {}
-        for channel in filtered_channels:
-            group = channel.get('group_title', 'Unknown')
-            name = channel.get('display_name', '')
-            key = (group, name)  # 使用分组和名称的元组作为键
-            if key not in grouped_channels:
-                grouped_channels[key] = []
-            grouped_channels[key].append(channel)
-
-        # 对每个分组下的同名频道按质量评分、清晰度和下载速度排序并只保留前2个
-        final_channels = []
-        for (group, name), channels in grouped_channels.items():
-            # 多级排序：首先按质量评分排序，然后按清晰度（分辨率），最后按下载速度
-            sorted_channels = sorted(
-                channels, 
-                key=lambda x: (
-                    float(x.get('quality_score', 0) or 0),  # 质量评分
-                    _get_resolution_score(x.get('resolution', '')),  # 清晰度评分
-                    float(x.get('download_speed', 0) or 0)  # 下载速度
-                ), 
-                reverse=True  # 降序排列
-            )
-            final_channels.extend(sorted_channels[:2])  # 只保留前2个
-
-        # 获取排序模板
-        cursor.execute("""
-            SELECT name, group_orders
-            FROM sort_templates
-        """)
-        sort_templates_raw = cursor.fetchall()
-        sort_templates = {}
-
-        for template_name, group_orders in sort_templates_raw:
-            try:
-                # 解析JSON格式的group_orders
-                orders = json.loads(group_orders)
-                # 合并到sort_templates中
-                for group_name, channels in orders.items():
-                    if group_name not in sort_templates:
-                        sort_templates[group_name] = []
-                    sort_templates[group_name].extend(channels)
-            except json.JSONDecodeError:
-                logger.error(f"Invalid JSON format in sort template: {template_name}")
-                continue
-
-
         # 使用规则集合名称作为文件名
         filename = f"{rule_set[1]}"
         filename = ''.join(c for c in filename if c.isalnum() or c in ('_', '-', '.'))

@@ -54,7 +54,7 @@ export const FilterRuleSetList = () => {
 
     const handleEdit = (record: FilterRuleSet) => {
         setEditingId(record.id);
-        // Remove form.setFieldsValue here as it's handled in FilterRuleSetForm
+        setSelectedRuleSetId(null); // 重置选中的规则集合
         setIsModalVisible(true);
     };
 
@@ -93,7 +93,7 @@ export const FilterRuleSetList = () => {
             }, {
                 onSuccess: () => {
                     message.success(isSet ? '筛选合集添加成功' : '规则添加成功');
-                    setIsRuleModalVisible(false);
+                    // setIsRuleModalVisible(false);
                 },
                 onError: () => message.error(isSet ? '筛选合集添加失败' : '规则添加失败')
             });
@@ -364,6 +364,7 @@ export const FilterRuleSetList = () => {
                 onCancel={() => setIsRuleModalVisible(false)}
                 footer={null}
                 width={800}
+                destroyOnClose
             >
                 {selectedRuleSetId && (
                     <RuleSetRulesForm

@@ -16,6 +16,7 @@ from functools import partial
 import re  # 添加 re 模块导入
 import time
 from .blocked_domains import should_skip_domain, record_domain_failure, get_domain_key
+from utils import *
 
 import logging
 logger = logging.getLogger(__name__)
@@ -160,105 +161,6 @@ async def test_stream_url(url: str, track_id: int = None) -> tuple[bool, float, 
             
         return False, 0.0, get_default_stream_info()
 
-async def extract_bitrate(probe_result: dict) -> int:
-    """从probe结果中提取码率信息"""
-    DEFAULT_BITRATE = 5 * 1024 * 1024  # 默认5Mbps
-    
-    if not probe_result or not isinstance(probe_result, dict):
-        return DEFAULT_BITRATE
-        
-    try:
-        # 1. 从format信息中获取总码率
-        if 'format' in probe_result:
-            format_bitrate = probe_result['format'].get('bit_rate')
-            if format_bitrate:
-                return int(format_bitrate)
-        
-        # 2. 从视频流中获取码率
-        if 'streams' in probe_result:
-            video_bitrate = 0
-            audio_bitrate = 0
-            
-            for stream in probe_result.get('streams', []):
-                if stream.get('codec_type') == 'video':
-                    video_bitrate = extract_video_bitrate(stream)
-                elif stream.get('codec_type') == 'audio':
-                    audio_bitrate = int(stream.get('bit_rate', 0))
-            
-            total_stream_bitrate = video_bitrate + audio_bitrate
-            if total_stream_bitrate > 0:
-                return total_stream_bitrate
-        
-        return DEFAULT_BITRATE
-        
-    except (ValueError, TypeError) as e:
-        logger.warning(f"解析码率时出错: {str(e)}, 使用默认值5Mbps")
-        return DEFAULT_BITRATE
-
-def extract_video_bitrate(stream: dict) -> int:
-    """从视频流中提取码率"""
-    bitrate_sources = [
-        ('bit_rate', None),
-        ('max_bit_rate', None),
-        ('tags.BPS', 'tags'),
-        ('tags.variant_bitrate', 'tags'),
-        ('tags.BANDWIDTH', 'tags')
-    ]
-    
-    for key, parent in bitrate_sources:
-        try:
-            if parent:
-                value = stream.get(parent, {}).get(key.split('.')[-1], 0)
-            else:
-                value = stream.get(key, 0)
-            if value:
-                return int(value)
-        except (ValueError, TypeError):
-            continue
-    
-    return 0
-
-def parse_test_results(results: list, track_id: int) -> tuple:
-    """解析测试结果"""
-    probe_result = None
-    ping_time = 0.0
-    speed_info = {
-        'download_speed': 0.0,
-        'speed_test_status': False,
-        'speed_test_time': None
-    }
-
-    for i, result in enumerate(results):
-        if isinstance(result, Exception):
-            logger.error(f"任务 {i} 执行失败: {str(result)}")
-            continue
-            
-        if i == 0:  # FFmpeg探测结果
-            probe_result = result
-        elif i == 1:  # Ping结果
-            ping_time = result if isinstance(result, (int, float)) else 0.0
-        elif i == 2 and track_id:  # 测速结果
-            speed_info = result
-
-    return probe_result, ping_time, speed_info
-
-def get_default_stream_info() -> dict:
-    """获取默认的流媒体信息"""
-    return {
-        'video_codec': '',
-        'audio_codec': '',
-        'resolution': '',
-        'bitrate': 0,
-        'frame_rate': 0,
-        'ping_time': 0.0,
-        'download_speed': 0.0,
-        'speed_test_status': False,
-        'speed_test_time': None,
-        'buffer_health': 0.0,  # 新增：缓冲健康度
-        'stability_score': 0.0,  # 新增：稳定性评分
-        'quality_score': 0.0,    # 新增：综合质量评分
-    }
-
 async def probe_stream(url: str) -> dict:
     """FFmpeg探测流"""
     try:
@@ -314,52 +216,80 @@ async def probe_stream(url: str) -> dict:
         logger.error(f"FFmpeg探测过程出现异常: {url}, {str(e)}")
         return {}
 
+# 添加结果更新队列
+track_result_queue = []
+TRACK_RESULT_BATCH_SIZE = 20
+last_track_result_update = time.time()
+TRACK_RESULT_UPDATE_INTERVAL = 30  # 秒
+
+async def batch_update_track_results():
+    """批量更新频道测试结果"""
+    global track_result_queue, last_track_result_update
+    
+    if not track_result_queue:
+        return
+        
+    updates = track_result_queue.copy()
+    track_result_queue.clear()
+    last_track_result_update = time.time()
+    
+    try:
+        with get_db_connection() as conn:
+            c = conn.cursor()
+            c.executemany(
+                """UPDATE stream_tracks SET 
+                    test_status = ?, test_latency = ?, video_codec = ?, 
+                    audio_codec = ?, resolution = ?, bitrate = ?, 
+                    frame_rate = ?, ping_time = ?, last_test_time = ?
+                   WHERE id = ?""",
+                [(u['status'], u['speed'], u['stream_info'].get('video_codec'),
+                  u['stream_info'].get('audio_codec'), u['stream_info'].get('resolution'),
+                  u['stream_info'].get('bitrate'), u['stream_info'].get('frame_rate'),
+                  u['stream_info'].get('ping_time'), datetime.now().isoformat(),
+                  u['track_id']) for u in updates]
+            )
+            conn.commit()
+            logger.debug(f"批量更新了 {len(updates)} 个频道的测试结果")
+    except Exception as e:
+        logger.error(f"批量更新测试结果时出错: {str(e)}")
+        # 如果更新失败，将未更新的记录放回队列
+        track_result_queue.extend(updates)
+
 async def test_stream_track(track_id: int):
     logger.info(f"开始测试频道ID: {track_id}")
+    global track_result_queue, last_track_result_update
     
-    max_retries = 3
-    retry_delay = 1  # seconds
-    
-    for attempt in range(max_retries):
-        try:
-            with get_db_connection() as conn:
-                logger.debug(f"获取数据库连接成功: track_id={track_id}")
-                c = conn.cursor()
-                c.execute("SELECT url FROM stream_tracks WHERE id = ?", (track_id,))
-                result = c.fetchone()
-                if not result:
-                    logger.warning(f"未找到频道ID: {track_id}")
-                    return
+    try:
+        with get_db_connection() as conn:
+            c = conn.cursor()
+            c.execute("SELECT url FROM stream_tracks WHERE id = ?", (track_id,))
+            result = c.fetchone()
+            if not result:
+                logger.warning(f"未找到频道ID: {track_id}")
+                return
+            
+            url = result[0]
+            logger.debug(f"开始测试频道URL: {url}, track_id={track_id}")
+            status, speed, stream_info = await test_stream_url(url, track_id)
+            logger.debug(f"频道测试完成: track_id={track_id}, status={status}, speed={speed}")
+            
+            # 将测试结果添加到更新队列
+            track_result_queue.append({
+                'track_id': track_id,
+                'status': status,
+                'speed': speed,
+                'stream_info': stream_info
+            })
+            
+            # 检查是否需要执行批量更新
+            current_time = time.time()
+            if (len(track_result_queue) >= TRACK_RESULT_BATCH_SIZE or 
+                current_time - last_track_result_update >= TRACK_RESULT_UPDATE_INTERVAL):
+                await batch_update_track_results()
                 
-                url = result[0]
-                logger.debug(f"开始测试频道URL: {url}, track_id={track_id}")
-                status, speed, stream_info = await test_stream_url(url, track_id)
-                logger.debug(f"频道测试完成: track_id={track_id}, status={status}, speed={speed}")
-                
-                # 更新测试结果
-                logger.debug(f"开始更新频道测试结果: track_id={track_id}")
-                c.execute(
-                    """UPDATE stream_tracks SET 
-                        test_status = ?, test_latency = ?, video_codec = ?, 
-                        audio_codec = ?, resolution = ?, bitrate = ?, 
-                        frame_rate = ?, ping_time = ?, last_test_time = ?
-                       WHERE id = ?""",
-                    (status, speed, stream_info.get('video_codec'), 
-                     stream_info.get('audio_codec'), stream_info.get('resolution'), 
-                     stream_info.get('bitrate'), stream_info.get('frame_rate'),
-                     stream_info.get('ping_time'), datetime.now().isoformat(), 
-                     track_id)
-                )
-                conn.commit()
-                logger.info(f"频道测试结果已更新: track_id={track_id}, 状态={status}, 延迟={speed}秒")
-                break
-        except sqlite3.OperationalError as e:
-            if "locked" in str(e) and attempt < max_retries - 1:
-                logger.warning(f"数据库锁定，第{attempt+1}次重试: track_id={track_id}")
-                await asyncio.sleep(retry_delay * (attempt + 1))
-            else:
-                logger.error(f"更新测试结果失败: track_id={track_id}, 错误信息: {str(e)}", exc_info=True)
-                raise
+    except Exception as e:
+        logger.error(f"测试频道失败: track_id={track_id}, 错误信息: {str(e)}", exc_info=True)
+        raise
 
 router = APIRouter()
 
@@ -462,6 +392,8 @@ async def test_all_tracks():
         c.execute("""
             SELECT id FROM stream_tracks 
             WHERE COALESCE(probe_failure_count, 0) < 5
+            AND (last_test_time IS NULL OR 
+                 datetime(last_test_time) < datetime('now', '-1 hour'))
         """)
         track_ids = [row[0] for row in c.fetchall()]
         
@@ -489,9 +421,9 @@ db_executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="db_worker")
 async def process_batch_tasks(task_id: int, track_ids: list):
     logger.info(f"开始处理批量任务 {task_id}")
     
-    # 设置并发限制
-    semaphore = asyncio.Semaphore(5)
-    batch_size = 10
+    # 优化并发设置以提高处理速度
+    semaphore = asyncio.Semaphore(15)  # 从5增加到15
+    batch_size = 30  # 从10增加到30
     results = {}
     
     # 检查IPv6可访问性
@@ -936,97 +868,6 @@ async def delete_stream_track(track_id: int):
         logger.info(f"频道已删除: {track_id}")
         return BaseResponse.success(message="频道已删除")
 
-
-async def ping_url(url: str) -> float:
-    try:
-        # 解析URL以提取域名或IP地址
-        parsed_url = urlparse(url)
-        host = parsed_url.hostname
-
-        if not host:
-            logger.error(f"无法解析URL: {url}")
-            return 0.0
-
-        # 使用ping3库测试域名或IP地址
-        ping_time = ping(host, unit='ms')
-        print(f"Ping时间: {ping_time} ms")        
-        if ping_time is None:
-            logger.error(f"Ping失败: 无法到达 {host}")
-            return 0.0
-        return ping_time
-    except Exception as e:
-        logger.error(f"Ping测试时发生错误: {str(e)}")
-        return 0.0
-
-def extract_frame_rate(stream: dict) -> float:
-    """从视频流中提取帧率"""
-    for rate_key in ['r_frame_rate', 'avg_frame_rate']:
-        if stream.get(rate_key):
-            try:
-                num, den = map(int, stream[rate_key].split('/'))
-                if den != 0:
-                    return round(num / den, 2)
-            except (ValueError, ZeroDivisionError):
-                continue
-    return 0.0
-                
-async def extract_stream_info(probe_result: dict, ping_time: float, speed_info: dict) -> dict:
-    """Extract stream information from probe result"""
-    stream_info = get_default_stream_info()
-    stream_info.update({
-        'ping_time': ping_time,
-        'download_speed': speed_info.get('download_speed', 0.0),
-        'speed_test_status': speed_info.get('speed_test_status', False),
-        'speed_test_time': speed_info.get('speed_test_time'),
-        'buffer_health': speed_info.get('buffer_health', 0.0),
-        'stability_score': speed_info.get('stability_score', 0.0),
-        'quality_score': speed_info.get('quality_score', 0.0)
-    })
-
-    if probe_result and isinstance(probe_result, dict) and 'streams' in probe_result:
-        # 获取码率
-        bitrate = await extract_bitrate(probe_result)
-        stream_info['bitrate'] = bitrate // 1000  # 转换为 Kbps
-        
-        for stream in probe_result.get('streams', []):
-            if 'codec_type' in stream:
-                
-                # 在 extract_stream_info 中使用
-                if stream['codec_type'] == 'video':
-                    stream_info['video_codec'] = stream.get('codec_name', '')
-                    if stream.get('width') and stream.get('height'):
-                        stream_info['resolution'] = f"{stream['width']}x{stream['height']}"
-                    stream_info['frame_rate'] = extract_frame_rate(stream)
-                elif stream['codec_type'] == 'audio':
-                    stream_info['audio_codec'] = stream.get('codec_name', '')
-
-    return stream_info
-
-
-async def check_ipv6_connectivity() -> bool:
-    """
-    检查系统是否支持IPv6连接
-    返回:
-        bool: 如果IPv6可用返回True，否则返回False
-    """
-    ipv6_test_hosts = [
-        "2001:4860:4860::8888",  # Google DNS
-        "2606:4700:4700::1111",  # Cloudflare DNS
-        "2400:3200::1",          # Alibaba DNS
-    ]
-    
-    for host in ipv6_test_hosts:
-        try:
-            ping_result = ping(host, timeout=2)
-            if ping_result is not None and ping_result is not False:
-                logger.info(f"IPv6连接测试成功: {host}")
-                return True
-        except Exception as e:
-            logger.debug(f"IPv6测试失败 ({host}): {str(e)}")
-            continue
-    
-    logger.warning("系统不支持IPv6连接")
-    return False
 
 # 添加失败计数器相关的常量和缓存
 FAILURE_THRESHOLD = 4  # 允许的最大失败次数

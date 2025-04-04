@@ -177,6 +177,7 @@ export const ChannelLogoList: React.FC = () => {
         confirmLoading={mutation.isPending}
         okText={editingLogo? '保存' : '添加'}
         cancelText="取消"
+        destroyOnClose
       >
         <Form
           form={form}

@@ -29,12 +29,21 @@ export const RuleSetRulesForm: React.FC<RuleSetRulesFormProps> = ({
     handleRemoveRule,
     isRuleInSet,
 }) => {
+    React.useEffect(() => {
+        // 当selectedRuleSetId变化时重置组件状态
+    }, [selectedRuleSetId]);
     return (
         <div>
             <div style={{ marginBottom: 16 }}>
                 <Select
                     style={{ width: '100%' }}
                     placeholder="选择要添加的规则"
+                    showSearch
+                    filterOption={(input, option) => {
+                        if (!option) return false;
+                        const label = option.label?.toString().toLowerCase() || '';
+                        return label.includes(input.toLowerCase());
+                    }}
                     options={[
                         {
                             label: '规则',
@@ -78,7 +87,7 @@ export const RuleSetRulesForm: React.FC<RuleSetRulesFormProps> = ({
                         key: 'details',
                         render: (_, record: any) => (
                             record.pattern ? (
-                                <span>{`${record.type} - ${record.pattern}`}</span>
+                                <span>{`${typeMap[record.type]} - ${record.pattern}`}</span>
                             ) : (
                                 <span>{`包含 ${record.rules?.length || 0} 个规则`}</span>
                             )
