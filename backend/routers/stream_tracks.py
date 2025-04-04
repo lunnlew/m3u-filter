@@ -368,7 +368,7 @@ async def get_stream_tracks(
     name: Optional[str] = None,
     group_title: Optional[str] = None,
     source_id: Optional[int] = None,
-    test_status: Optional[bool] = False,
+    test_status: Optional[bool] = None,
     page: int = 1,
     page_size: int = 10,
 ):
