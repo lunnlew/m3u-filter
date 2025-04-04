@@ -1,8 +1,9 @@
-import React, { useEffect } from 'react';
-import { Form, Input, Button, App, Space } from 'antd';
+import React, { useEffect, useState } from 'react';
+import { Form, Input, Button, App, Space, Modal, Select } from 'antd';
 import { useGroupMappings, useUpdateGroupMapping } from '../hooks/filterRuleSets';
 import { useDeleteGroupMapping } from '../hooks/filterRuleSets';
 import { useBatchUpdateGroupMappings, useBatchDeleteGroupMappings } from '../hooks/filterRuleSets';
+import { useGroupMappingTemplates, useCreateGroupMappingTemplate, useApplyGroupMappingTemplate } from '../hooks/groupMappingTemplates';
 
 interface GroupMappingFormProps {
   ruleSetId?: number;
@@ -14,9 +15,18 @@ export const GroupMappingForm: React.FC<GroupMappingFormProps> = ({ ruleSetId, o
   const [form] = Form.useForm();
   const { data: mappings, isLoading, refetch } = useGroupMappings(ruleSetId);
   const { mutate: updateMapping, isPending } = useUpdateGroupMapping();
-  const { mutate: deleteMapping } = useDeleteGroupMapping(); // 需要先引入删除的API钩子
+  const { mutate: deleteMapping } = useDeleteGroupMapping();
   const { mutate: batchUpdateMappings } = useBatchUpdateGroupMappings();
   const { mutate: batchDeleteMappings } = useBatchDeleteGroupMappings();
+
+  // 模板相关状态和钩子
+  const [isTemplateModalVisible, setIsTemplateModalVisible] = useState(false);
+  const [templateName, setTemplateName] = useState('');
+  const [templateDescription, setTemplateDescription] = useState('');
+  const [selectedTemplateIds, setSelectedTemplateIds] = useState<number[]>([]);
+  const { data: templates = [] } = useGroupMappingTemplates();
+  const createTemplateMutation = useCreateGroupMappingTemplate();
+  const applyTemplateMutation = useApplyGroupMappingTemplate();
 
   // 每次ruleSetId变化时重新加载数据
   useEffect(() => {
@@ -38,7 +48,6 @@ export const GroupMappingForm: React.FC<GroupMappingFormProps> = ({ ruleSetId, o
   }, [form, mappings]);
 
   const handleSubmit = (values: { mappings: Array<{ channel: string; group: string }> }) => {
-    // 批量处理所有映射
     const updatePayload = values.mappings.map(({ channel, group }) => ({
       channel_name: channel,
       custom_group: group,
@@ -48,10 +57,94 @@ export const GroupMappingForm: React.FC<GroupMappingFormProps> = ({ ruleSetId, o
     batchUpdateMappings(updatePayload);
     message.success('分组映射已更新');
   };
+
+  // 保存为模板
+  const handleSaveAsTemplate = () => {
+    const currentMappings = form.getFieldValue('mappings');
+    if (!currentMappings || currentMappings.length === 0) {
+      message.error('请先添加映射规则');
+      return;
+    }
+    setIsTemplateModalVisible(true);
+  };
+
+  // 确认保存模板
+  const handleConfirmSaveTemplate = () => {
+    if (!templateName.trim()) {
+      message.error('请输入模板名称');
+      return;
+    }
+    const currentMappings = form.getFieldValue('mappings');
+    const mappingsObj = currentMappings.reduce((acc: Record<string, string>, curr: { channel: string; group: string }) => {
+      acc[curr.channel] = curr.group;
+      return acc;
+    }, {});
+
+    createTemplateMutation.mutate({
+      name: templateName,
+      description: templateDescription,
+      mappings: mappingsObj
+    }, {
+      onSuccess: () => {
+        message.success('模板保存成功');
+        setIsTemplateModalVisible(false);
+        setTemplateName('');
+        setTemplateDescription('');
+      },
+      onError: () => message.error('模板保存失败')
+    });
+  };
+
+  // 应用模板
+  const handleApplyTemplate = (templateIds: number[]) => {
+    if (!ruleSetId || templateIds.length === 0) return;
+    
+    applyTemplateMutation.mutate(
+      { templateIds, ruleSetId },
+      {
+        onSuccess: () => {
+          message.success('所有模板应用成功');
+          refetch();
+        },
+        onError: () => {
+          message.error('模板应用失败');
+        }
+      }
+    );
+  };
+
   return (
+    <>
       <Form form={form} onFinish={handleSubmit} layout="vertical">
+        <Space style={{ marginBottom: 16 }}>
+          <Button onClick={handleSaveAsTemplate}>保存为模板</Button>
+          <Select
+            mode="multiple"
+            style={{ width: 200 }}
+            placeholder="选择模板"
+            value={selectedTemplateIds}
+            onChange={setSelectedTemplateIds}
+          >
+            {templates.map(template => (
+              <Select.Option key={template.id} value={template.id}>
+                {template.name}
+              </Select.Option>
+            ))}
+          </Select>
+          <Button
+            type="primary"
+            onClick={() => {
+              handleApplyTemplate(selectedTemplateIds);
+              setSelectedTemplateIds([]);
+            }}
+            disabled={selectedTemplateIds.length === 0}
+          >
+            应用选中模板
+          </Button>
+        </Space>
+
         <Form.List name="mappings">
-          {(fields, { add, remove }) => (  // 这里解构出remove函数
+          {(fields, { add, remove }) => (
             <>
               {fields.map(({ key, name, ...restField }) => {
                 const channel = form.getFieldValue(['mappings', name, 'channel']);
@@ -76,7 +169,7 @@ export const GroupMappingForm: React.FC<GroupMappingFormProps> = ({ ruleSetId, o
                     <Button 
                       danger 
                       onClick={() => {
-                        remove(name);  // 现在可以正确使用remove函数
+                        remove(name);
                         if (channel) {
                           deleteMapping({
                             channel_name: channel,
@@ -108,5 +201,34 @@ export const GroupMappingForm: React.FC<GroupMappingFormProps> = ({ ruleSetId, o
           </Space>
         </Form.Item>
       </Form>
+
+      <Modal
+        title="保存为模板"
+        open={isTemplateModalVisible}
+        onOk={handleConfirmSaveTemplate}
+        onCancel={() => {
+          setIsTemplateModalVisible(false);
+          setTemplateName('');
+          setTemplateDescription('');
+        }}
+      >
+        <Form layout="vertical">
+          <Form.Item label="模板名称" required>
+            <Input
+              value={templateName}
+              onChange={e => setTemplateName(e.target.value)}
+              placeholder="请输入模板名称"
+            />
+          </Form.Item>
+          <Form.Item label="模板描述">
+            <Input.TextArea
+              value={templateDescription}
+              onChange={e => setTemplateDescription(e.target.value)}
+              placeholder="请输入模板描述"
+            />
+          </Form.Item>
+        </Form>
+      </Modal>
+    </>
   );
 };

@@ -401,11 +401,26 @@ async def generate_m3u_file(
         # 使用规则树过滤频道
         filtered_channels = rule_tree.filter_channels(channels)
         
-        # 获取分组映射
-        cursor.execute(
-            "SELECT channel_name, custom_group FROM group_mappings WHERE rule_set_id = ? OR rule_set_id IS NULL",
-            (set_id,)
-        )
+        # 获取分组映射和模板
+        cursor.execute("""
+            SELECT channel_name, custom_group 
+            FROM (
+                SELECT channel_name, custom_group, 1 as priority
+                FROM group_mappings
+                WHERE rule_set_id = ?
+                UNION ALL
+                SELECT gmt.channel_name, gmt.custom_group, 2 as priority
+                FROM group_mapping_template_items gmt
+                INNER JOIN group_mapping_templates t ON gmt.template_id = t.id
+                WHERE t.rule_set_id = ?
+                UNION ALL
+                SELECT channel_name, custom_group, 3 as priority
+                FROM group_mappings
+                WHERE rule_set_id IS NULL
+            ) combined
+            GROUP BY channel_name
+            HAVING priority = MIN(priority)
+        """, (set_id, set_id))
         group_mappings = dict(cursor.fetchall())
         # 在过滤频道后应用分组映射
         for channel in filtered_channels:
@@ -598,6 +613,33 @@ async def generate_txt_file(
 
         # 使用规则树过滤频道
         filtered_channels = rule_tree.filter_channels(channels)
+        
+        # 获取分组映射和模板
+        cursor.execute("""
+            SELECT channel_name, custom_group 
+            FROM (
+                SELECT channel_name, custom_group, 1 as priority
+                FROM group_mappings
+                WHERE rule_set_id = ?
+                UNION ALL
+                SELECT gmt.channel_name, gmt.custom_group, 2 as priority
+                FROM group_mapping_template_items gmt
+                INNER JOIN group_mapping_templates t ON gmt.template_id = t.id
+                WHERE t.rule_set_id = ?
+                UNION ALL
+                SELECT channel_name, custom_group, 3 as priority
+                FROM group_mappings
+                WHERE rule_set_id IS NULL
+            ) combined
+            GROUP BY channel_name
+            HAVING priority = MIN(priority)
+        """, (set_id, set_id))
+        group_mappings = dict(cursor.fetchall())
+        
+        # 在过滤频道后应用分组映射
+        for channel in filtered_channels:
+            if channel['display_name'] in group_mappings:
+                channel['group_title'] = group_mappings[channel['display_name']]
 
         # 按分组和频道名称对频道进行分组
         grouped_channels = {}

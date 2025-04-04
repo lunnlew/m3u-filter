@@ -1,0 +1,15 @@
+.group-mapping-row {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  margin-bottom: 16px;
+}
+
+.group-mapping-input {
+  flex: 1;
+  margin-bottom: 0;
+}
+
+.mappings-container {
+  margin-bottom: 24px;
+}

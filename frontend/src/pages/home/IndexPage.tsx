@@ -13,6 +13,7 @@ import FilterRuleList from '@/components/FilterRuleList';
 import { FilterRuleSetList } from '@/components/FilterRuleSetList';
 import SortTemplateList from '@/components/SortTemplateList';
 import BlockedDomains from '@/components/BlockedDomains';
+import { GroupMappingTemplateList } from '@/components/GroupMappingTemplateList';
 
 const queryClient = new QueryClient();
 
@@ -44,8 +45,9 @@ const Index = () => {
               { key: 'tracks', label: '直播源管理' },
               { key: 'blocked-domains', label: '域名黑名单' },
               { key: 'filters', label: '过滤规则管理' },
-              { key: 'filter-sets', label: '筛选合集管理' },
+              { key: 'group-mapping-templates', label: '分组映射模板' },
               { key: 'sort-templates', label: '排序模板管理' },
+              { key: 'filter-sets', label: '筛选合集管理' },
               { key: 'settings', label: '代理设置' },
             ]}
             style={{ marginBottom: '20px' }}
@@ -60,7 +62,8 @@ const Index = () => {
                         activeTab === 'filters' ? <FilterRuleList /> :
                           activeTab === 'filter-sets' ? <FilterRuleSetList /> :
                             activeTab === 'sort-templates' ? <SortTemplateList /> :
-                              <ProxyConfigForm />}
+                              activeTab === 'group-mapping-templates' ? <GroupMappingTemplateList /> :
+                                <ProxyConfigForm />}
         </div>
       </QueryClientProvider>
     </ConfigProvider>
