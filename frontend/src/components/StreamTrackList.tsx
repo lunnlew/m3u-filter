@@ -195,6 +195,33 @@ export default function StreamTrackList() {
       }
     },
     {
+      title: '缓冲健康度',
+      dataIndex: 'buffer_health',
+      key: 'buffer_health',
+      render: (health: number | null) => {
+        if (health === null) return '-';
+        return `${(health * 1).toFixed(1)}`;
+      }
+    },
+    {
+      title: '稳定性评分',
+      dataIndex: 'stability_score',
+      key: 'stability_score',
+      render: (score: number | null) => {
+        if (score === null) return '-';
+        return `${(score * 10).toFixed(1)}`;
+      }
+    },
+    {
+      title: '质量评分',
+      dataIndex: 'quality_score',
+      key: 'quality_score',
+      render: (score: number | null) => {
+        if (score === null) return '-';
+        return `${(score * 10).toFixed(1)}`;
+      }
+    },
+    {
       title: '操作',
       key: 'action',
       render: (_: any, record: StreamTrack) => (

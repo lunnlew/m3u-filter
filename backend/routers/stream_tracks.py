@@ -723,9 +723,11 @@ async def test_download_speed(url: str, track_id: int, bitrate: int) -> dict:
                         
                         # 计算缓冲健康度 - 下载速度与码率的比率
                         if bitrate > 0:
-                            # 缓冲健康度 = 下载速度 / 所需码率，最大为1.0
+                            # 缓冲健康度 = 下载速度 / 所需码率
                             buffer_ratio = (current_speed * 1e6) / bitrate
-                            buffer_health = min(buffer_ratio, 1.0)
+                            # 修改为：允许超过1.0的值，表示有额外缓冲能力
+                            buffer_health = buffer_ratio
+                            logger.debug(f"缓冲健康度计算: 速度={current_speed:.2f}Mbps, 码率={bitrate/1e6:.2f}Mbps, 比率={buffer_ratio:.2f}")
                         
                         # 最低速度限制和日志记录
                         current_speed = max(current_speed, 0.1) if current_speed > 0 else 0.1
@@ -795,11 +797,16 @@ async def test_download_speed(url: str, track_id: int, bitrate: int) -> dict:
                 # 速度评分 (相对于码率的比率，最高为1.0)
                 speed_score = min(1.0, current_speed * 1e6 / (bitrate * 1.5)) if bitrate > 0 else 0.5
                 
+                # 缓冲健康度也需要限制在0-1范围内
+                normalized_buffer_health = min(1.0, buffer_health)
+                
                 quality_score = (
                     speed_score * speed_weight + 
-                    buffer_health * buffer_weight + 
+                    normalized_buffer_health * buffer_weight + 
                     stability_score * stability_weight
                 )
+                # 确保最终质量评分不超过1.0
+                quality_score = min(1.0, quality_score)
             
             # 设置最终状态 - 改进判断标准
             # 不仅考虑速度，还考虑缓冲健康度和稳定性
