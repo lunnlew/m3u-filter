@@ -368,6 +368,9 @@ async def generate_m3u_file(
                 stream_tracks.catchup,
                 stream_tracks.catchup_source,
                 stream_tracks.download_speed,
+                stream_tracks.resolution,
+                stream_tracks.bitrate,
+                stream_tracks.quality_score,
                 epg_channels.channel_id,
                 epg_channels.language,
                 epg_channels.category,
@@ -419,15 +422,20 @@ async def generate_m3u_file(
                 grouped_channels[key] = []
             grouped_channels[key].append(channel)
 
-        # 对每个分组下的同名频道按download_speed排序并只保留前2个
+        # 对每个分组下的同名频道按质量评分、清晰度和下载速度排序并只保留前2个
         final_channels = []
         for (group, name), channels in grouped_channels.items():
+            # 多级排序：首先按质量评分排序，然后按清晰度（分辨率），最后按下载速度
             sorted_channels = sorted(
                 channels, 
-                key=lambda x: float(x.get('download_speed', 0) or 0), 
-                reverse=True
+                key=lambda x: (
+                    float(x.get('quality_score', 0) or 0),  # 质量评分
+                    _get_resolution_score(x.get('resolution', '')),  # 清晰度评分
+                    float(x.get('download_speed', 0) or 0)  # 下载速度
+                ), 
+                reverse=True  # 降序排列
             )
-            final_channels.extend(sorted_channels[:2])
+            final_channels.extend(sorted_channels[:2])  # 只保留前2个
 
 
         # 使用规则集合名称作为文件名
@@ -484,6 +492,48 @@ async def generate_m3u_file(
         
         return BaseResponse.success({"url_path": f"/m3u/{filename}"})
 
+# 添加辅助函数用于计算分辨率评分
+def _get_resolution_score(resolution: str) -> int:
+    """
+    根据分辨率返回评分，分辨率越高分数越高
+    """
+    if not resolution:
+        return 0
+        
+    try:
+        # 尝试解析分辨率格式，如 "1920x1080"
+        if 'x' in resolution:
+            width, height = map(int, resolution.lower().split('x'))
+            return width * height  # 使用像素总数作为评分
+        
+        # 处理常见分辨率标识
+        resolution = resolution.upper()
+        if '4K' in resolution or '2160P' in resolution:
+            return 3840 * 2160
+        elif '1440P' in resolution or '2K' in resolution:
+            return 2560 * 1440
+        elif '1080P' in resolution or 'FHD' in resolution:
+            return 1920 * 1080
+        elif '720P' in resolution or 'HD' in resolution:
+            return 1280 * 720
+        elif '576P' in resolution or 'SD' in resolution:
+            return 720 * 576
+        elif '480P' in resolution:
+            return 720 * 480
+        elif '360P' in resolution:
+            return 480 * 360
+        else:
+            # 尝试从字符串中提取数字
+            import re
+            numbers = re.findall(r'\d+', resolution)
+            if numbers:
+                # 假设最大的数字可能是高度
+                return int(max(numbers, key=int)) * 16/9  # 估算宽度
+    except Exception as e:
+        logger.warning(f"解析分辨率失败: {resolution}, 错误: {str(e)}")
+    
+    return 0  # 默认返回0
+
 @router.post("/filter-rule-sets/{set_id}/generate-txt")
 async def generate_txt_file(
     set_id: int,
@@ -516,6 +566,9 @@ async def generate_txt_file(
                 stream_tracks.catchup,
                 stream_tracks.catchup_source,
                 stream_tracks.download_speed,
+                stream_tracks.resolution,
+                stream_tracks.bitrate,
+                stream_tracks.quality_score,
                 epg_channels.channel_id,
                 epg_channels.language,
                 epg_channels.category,
@@ -556,15 +609,20 @@ async def generate_txt_file(
                 grouped_channels[key] = []
             grouped_channels[key].append(channel)
 
-        # 对每个分组下的同名频道按download_speed排序并只保留前2个
+        # 对每个分组下的同名频道按质量评分、清晰度和下载速度排序并只保留前2个
         final_channels = []
         for (group, name), channels in grouped_channels.items():
+            # 多级排序：首先按质量评分排序，然后按清晰度（分辨率），最后按下载速度
             sorted_channels = sorted(
                 channels, 
-                key=lambda x: float(x.get('download_speed', 0) or 0), 
-                reverse=True
+                key=lambda x: (
+                    float(x.get('quality_score', 0) or 0),  # 质量评分
+                    _get_resolution_score(x.get('resolution', '')),  # 清晰度评分
+                    float(x.get('download_speed', 0) or 0)  # 下载速度
+                ), 
+                reverse=True  # 降序排列
             )
-            final_channels.extend(sorted_channels[:2])
+            final_channels.extend(sorted_channels[:2])  # 只保留前2个
 
 
         # 使用规则集合名称作为文件名

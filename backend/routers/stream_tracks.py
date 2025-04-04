@@ -253,7 +253,10 @@ def get_default_stream_info() -> dict:
         'ping_time': 0.0,
         'download_speed': 0.0,
         'speed_test_status': False,
-        'speed_test_time': None
+        'speed_test_time': None,
+        'buffer_health': 0.0,  # 新增：缓冲健康度
+        'stability_score': 0.0,  # 新增：稳定性评分
+        'quality_score': 0.0,    # 新增：综合质量评分
     }
 
 async def probe_stream(url: str) -> dict:
@@ -614,11 +617,17 @@ async def test_download_speed(url: str, track_id: int, bitrate: int) -> dict:
             - speed_test_time: 测试时间
             - downloaded_bytes: 已下载字节数 (bytes)
             - duration_seconds: 测试持续时间 (秒)
+            - buffer_health: 缓冲健康度 (0-1.0)
+            - speed_stability: 速度稳定性 (0-1.0)
     """
     start_time = time.time()
     downloaded = 0
     speed = 0.0
     status = False
+    
+    # 新增：用于计算稳定性的速度历史记录
+    speed_history = []
+    buffer_health = 0.0
     
     try:
         import ffmpeg
@@ -626,7 +635,7 @@ async def test_download_speed(url: str, track_id: int, bitrate: int) -> dict:
         # 创建ffmpeg进程，设置超时和输出格式
         process = (
             ffmpeg
-            .input(url, t=10)  # 限制读取时间为10秒
+            .input(url, t=15)  # 增加测试时间到15秒以获取更准确的稳定性数据
             .output('pipe:', format='null')  # 输出到空设备
             .global_args(
                 '-loglevel', 'info',  # 设置日志级别
@@ -641,11 +650,11 @@ async def test_download_speed(url: str, track_id: int, bitrate: int) -> dict:
         current_speed = 0.0
         downloaded = 0
         start_time = time.time()  # 记录测试开始时间
+        last_size = 0  # 记录上次的大小，用于计算增量
+        last_time = start_time  # 记录上次的时间
 
         async def read_output():
-            nonlocal stderr_text, current_speed, downloaded
-            last_update = time.time()
-            total_bytes = 0  # 新增总字节数统计
+            nonlocal stderr_text, current_speed, downloaded, last_size, last_time, speed_history, buffer_health
             
             while True:
                 try:
@@ -666,21 +675,44 @@ async def test_download_speed(url: str, track_id: int, bitrate: int) -> dict:
                         time_match = re.search(r'time=(\d+):(\d+):(\d+\.\d+)', line)
                         speed_match = re.search(r'speed=\s*([\d.]+)x', line)
                         
+                        current_time = time.time()
+                        time_delta = current_time - last_time
+                        
                         # 优先使用实际下载字节数
                         if size_match and size_match.group(1) != 'N/A':
-                            downloaded = int(float(size_match.group(1)) * 1024)  # kB转bytes
+                            current_size = int(float(size_match.group(1)) * 1024)  # kB转bytes
+                            size_delta = current_size - last_size
+                            
+                            # 计算这个时间段的实时速度
+                            if time_delta > 0 and size_delta > 0:
+                                instant_speed = (size_delta * 8) / (time_delta * 1e6)  # bytes转Mbps
+                                # 确保添加有效的速度值到历史记录
+                                if instant_speed > 0:
+                                    speed_history.append(instant_speed)
+                                    logger.debug(f"添加速度历史记录: {instant_speed:.2f}Mbps, 当前历史记录数: {len(speed_history)}")
+                                
+                                # 更新最后的大小和时间
+                                last_size = current_size
+                                last_time = current_time
+                            
+                            downloaded = current_size
                         else:
                             # 备用方案：通过码率和速度倍率估算
                             if speed_match and bitrate > 0:
                                 speed_factor = float(speed_match.group(1))
-                                downloaded = int((bitrate * speed_factor) * (time.time() - start_time) / 8)
+                                estimated_speed = (bitrate / 1e6) * speed_factor
+                                # 也将估算的速度添加到历史记录
+                                if estimated_speed > 0:
+                                    speed_history.append(estimated_speed)
+                                    logger.debug(f"添加估算速度到历史记录: {estimated_speed:.2f}Mbps, 当前历史记录数: {len(speed_history)}")
+                                downloaded = int((bitrate * speed_factor) * (current_time - start_time) / 8)
                         
                         # 计算持续时间（即使没有size信息）
                         if time_match:
                             h, m, s = map(float, time_match.groups())
                             duration = h * 3600 + m * 60 + s
                         else:
-                            duration = time.time() - start_time
+                            duration = current_time - start_time
                         
                         # 最终速度计算逻辑
                         if duration > 0:
@@ -689,12 +721,19 @@ async def test_download_speed(url: str, track_id: int, bitrate: int) -> dict:
                             elif bitrate > 0 and speed_match:  # 备用方案
                                 current_speed = bitrate / 1e6 * float(speed_match.group(1))
                         
+                        # 计算缓冲健康度 - 下载速度与码率的比率
+                        if bitrate > 0:
+                            # 缓冲健康度 = 下载速度 / 所需码率，最大为1.0
+                            buffer_ratio = (current_speed * 1e6) / bitrate
+                            buffer_health = min(buffer_ratio, 1.0)
+                        
                         # 最低速度限制和日志记录
                         current_speed = max(current_speed, 0.1) if current_speed > 0 else 0.1
                         
                         # 调试日志包含数据来源信息
                         logger.debug(f"速度计算方式: {'实际数据' if size_match else '估算'} | "
-                                    f"速度: {current_speed:.2f}Mbps 持续时间: {duration:.2f}s")
+                                    f"速度: {current_speed:.2f}Mbps 持续时间: {duration:.2f}s | "
+                                    f"缓冲健康度: {buffer_health:.2f}")
 
                 except Exception as e:
                     logger.error(f"读取输出错误: {str(e)}")
@@ -704,10 +743,10 @@ async def test_download_speed(url: str, track_id: int, bitrate: int) -> dict:
         read_task = asyncio.create_task(read_output())
         
         try:
-            # 等待进程完成，最多10秒
+            # 等待进程完成，最多15秒
             await asyncio.wait_for(
                 asyncio.get_event_loop().run_in_executor(None, process.wait),
-                timeout=10
+                timeout=15
             )
         except asyncio.TimeoutError:
             logger.warning(f"测速超时: {url}")
@@ -717,25 +756,78 @@ async def test_download_speed(url: str, track_id: int, bitrate: int) -> dict:
                 process.kill()
             except:
                 pass
-            read_task.cancel()
             
-            # 设置最终状态
-            status = current_speed > 0
+            # 等待读取任务完成
+            try:
+                read_task.cancel()
+                await asyncio.sleep(0.1)  # 给读取任务一点时间完成
+            except:
+                pass
+            
+            # 计算速度稳定性
+            stability_score = 0.0
+            logger.debug(f"计算稳定性，速度历史记录数: {len(speed_history)}")
+            
+            if len(speed_history) > 1:
+                # 计算速度的标准差与平均值的比率，越小越稳定
+                avg_speed = sum(speed_history) / len(speed_history)
+                if avg_speed > 0:
+                    variance = sum((s - avg_speed) ** 2 for s in speed_history) / len(speed_history)
+                    std_dev = variance ** 0.5
+                    # 稳定性评分 = 1 - (标准差/平均值)，限制在0-1范围内
+                    # 如果标准差非常大，可能导致负值，所以使用max确保最小为0
+                    coefficient = min(std_dev / avg_speed, 1.0)  # 限制系数最大为1
+                    stability_score = max(0, 1 - coefficient)
+                    logger.debug(f"稳定性计算: 平均速度={avg_speed:.2f}, 标准差={std_dev:.2f}, 系数={coefficient:.2f}, 稳定性评分={stability_score:.2f}")
+            else:
+                # 如果没有足够的历史记录，给一个默认的中等稳定性评分
+                stability_score = 0.5
+                logger.debug(f"历史记录不足，使用默认稳定性评分: {stability_score}")
+            
+            # 计算综合质量评分 (结合速度、缓冲健康度和稳定性)
+            quality_score = 0.0
+            if current_speed > 0:
+                # 权重可以根据实际需求调整
+                speed_weight = 0.4
+                buffer_weight = 0.4
+                stability_weight = 0.2
+                
+                # 速度评分 (相对于码率的比率，最高为1.0)
+                speed_score = min(1.0, current_speed * 1e6 / (bitrate * 1.5)) if bitrate > 0 else 0.5
+                
+                quality_score = (
+                    speed_score * speed_weight + 
+                    buffer_health * buffer_weight + 
+                    stability_score * stability_weight
+                )
+            
+            # 设置最终状态 - 改进判断标准
+            # 不仅考虑速度，还考虑缓冲健康度和稳定性
+            status = (current_speed > 0 and 
+                     buffer_health > 0.6 and  # 缓冲至少要达到60%
+                     stability_score > 0.3)   # 稳定性至少要达到30%
+            
             speed = current_speed
-            logger.info(f"测速完成: {url}, 速度: {speed:.2f}Mbps")
+            logger.info(f"测速完成: {url}, 速度: {speed:.2f}Mbps, 缓冲健康度: {buffer_health:.2f}, 稳定性: {stability_score:.2f}, 质量评分: {quality_score:.2f}")
 
     except Exception as e:
         logger.error(f"测速失败: {url}, {str(e)}")
         status = False
         speed = 0.0
         downloaded = 0
+        buffer_health = 0.0
+        stability_score = 0.0
+        quality_score = 0.0
 
     return {
         'download_speed': round(speed, 2),  # 单位: Mbps
         'speed_test_status': status,
         'speed_test_time': datetime.now().isoformat(),
         'downloaded_bytes': downloaded,
-        'duration_seconds': round(time.time() - start_time, 2)
+        'duration_seconds': round(time.time() - start_time, 2),
+        'buffer_health': round(buffer_health, 2),
+        'stability_score': round(stability_score, 2),
+        'quality_score': round(quality_score, 2)
     }
 
 def update_track_result(track_id: int, status: bool, speed: float, stream_info: dict):
@@ -749,7 +841,8 @@ def update_track_result(track_id: int, status: bool, speed: float, stream_info: 
                 test_status = ?, test_latency = ?, video_codec = ?, 
                 audio_codec = ?, resolution = ?, bitrate = ?, 
                 frame_rate = ?, ping_time = ?, last_test_time = ?,
-                download_speed = ?, speed_test_status = ?, speed_test_time = ?
+                download_speed = ?, speed_test_status = ?, speed_test_time = ?,
+                buffer_health = ?, stability_score = ?, quality_score = ?
                WHERE id = ?""",
             (status, speed, stream_info.get('video_codec'), 
              stream_info.get('audio_codec'), stream_info.get('resolution'),
@@ -758,6 +851,9 @@ def update_track_result(track_id: int, status: bool, speed: float, stream_info: 
              download_speed,  # 使用转换后的速度值
              stream_info.get('speed_test_status', False),
              stream_info.get('speed_test_time'),
+             stream_info.get('buffer_health', 0.0),
+             stream_info.get('stability_score', 0.0),
+             stream_info.get('quality_score', 0.0),
              track_id)
         )
         conn.commit()
@@ -874,7 +970,10 @@ async def extract_stream_info(probe_result: dict, ping_time: float, speed_info: 
         'ping_time': ping_time,
         'download_speed': speed_info.get('download_speed', 0.0),
         'speed_test_status': speed_info.get('speed_test_status', False),
-        'speed_test_time': speed_info.get('speed_test_time')
+        'speed_test_time': speed_info.get('speed_test_time'),
+        'buffer_health': speed_info.get('buffer_health', 0.0),
+        'stability_score': speed_info.get('stability_score', 0.0),
+        'quality_score': speed_info.get('quality_score', 0.0)
     })
 
     if probe_result and isinstance(probe_result, dict) and 'streams' in probe_result:
