@@ -9,7 +9,8 @@ CREATE TABLE IF NOT EXISTS group_mappings (
 CREATE TABLE IF NOT EXISTS group_mapping_templates (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
-    description TEXT
+    description TEXT,
+    rule_set_id NUMERIC
 );
 
 CREATE TABLE IF NOT EXISTS group_mapping_template_items (
