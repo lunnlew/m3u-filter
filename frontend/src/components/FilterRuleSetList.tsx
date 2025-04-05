@@ -1,9 +1,6 @@
 import { useState } from 'react';
 import { Table, Button, Modal, Form, Input, Switch, App, Space, Select, Row, Col } from 'antd';
 import { SearchOutlined } from '@ant-design/icons';
-import {
-    useFilterRuleSets, useFilterRuleSetMutation, useFilterRuleSetDelete, useAddRuleToSet, useRemoveRuleFromSet, useGenerateM3U, useGenerateTXT  // 新增TXT生成钩子
-} from '../hooks/filterRuleSets';
 import { useFilterRules } from '../hooks/filterRules';
 import { FilterRuleSet, FilterRule } from '../types/filter';
 import { useSiteConfig } from '../hooks/siteConfig';
@@ -11,6 +8,18 @@ import { FilterRuleSetForm } from './FilterRuleSetForm';
 import './FilterRuleSetList.css';
 import { RuleSetRulesForm } from './RuleSetRulesForm';
 import { GroupMappingForm } from './GroupMappingForm';
+
+// 在 import 部分添加新的 hook
+import {
+    useFilterRuleSets,
+    useFilterRuleSetMutation,
+    useFilterRuleSetDelete,
+    useAddRuleToSet,
+    useRemoveRuleFromSet,
+    useGenerateM3U,
+    useGenerateTXT,
+    useTestRuleSet  // 新增
+} from '../hooks/filterRuleSets';
 
 export const FilterRuleSetList = () => {
     const { message } = App.useApp();
@@ -50,7 +59,18 @@ export const FilterRuleSetList = () => {
     const addRuleMutation = useAddRuleToSet();
     const removeRuleMutation = useRemoveRuleFromSet();
     const { mutateAsync: generateM3U } = useGenerateM3U();
-    const { mutateAsync: generateTXT } = useGenerateTXT();  // 新增TXT生成mutation
+    const { mutateAsync: generateTXT } = useGenerateTXT();
+    const testRuleSetMutation = useTestRuleSet();  // 添加测试mutation
+
+    // 添加测试处理函数
+    const handleTestRuleSet = async (id: number) => {
+        try {
+            const result = await testRuleSetMutation.mutateAsync(id);
+            message.success(`测试任务已创建，任务ID: ${result.data.task_id}`);
+        } catch (error) {
+            message.error('创建测试任务失败');
+        }
+    };
 
     const handleEdit = (record: FilterRuleSet) => {
         setEditingId(record.id);
@@ -150,7 +170,7 @@ export const FilterRuleSetList = () => {
 
     // 新增状态控制分组映射Modal
     const [isGroupMappingModalVisible, setIsGroupMappingModalVisible] = useState(false);
-    
+
     // 修改操作列中的分组映射按钮点击事件
     const columns = [
         { title: '名称', dataIndex: 'name', key: 'name' },
@@ -198,14 +218,21 @@ export const FilterRuleSetList = () => {
                     <Button type="link" onClick={() => handleGenerateM3U(record.id)}>生成M3U</Button>
                     <Button type="link" onClick={() => handleGenerateTXT(record.id)}>生成TXT</Button>
                     {/* 新增分组映射按钮 */}
-                    <Button 
-                        type="link" 
+                    <Button
+                        type="link"
                         onClick={() => {
                             setSelectedRuleSetId(record.id);
                             setIsGroupMappingModalVisible(true);
                         }}
                     >
                         分组映射
+                    </Button>
+                    <Button
+                        type="link"
+                        onClick={() => handleTestRuleSet(record.id)}
+                        loading={testRuleSetMutation.isPending}
+                    >
+                        测试集合
                     </Button>
                     <Button type="link" danger onClick={() => handleDelete(record.id)}>删除</Button>
                 </Space>
@@ -338,7 +365,7 @@ export const FilterRuleSetList = () => {
                     initialValues={editingId ? ruleSets.find(set => set.id === editingId) : undefined}
                 />
             </Modal>
-            
+
             {/* 分组映射Modal */}
             <Modal
                 title="分组映射配置"
@@ -350,7 +377,7 @@ export const FilterRuleSetList = () => {
             >
                 {selectedRuleSetId && (
                     <div className="group-mapping-container">
-                        <GroupMappingForm 
+                        <GroupMappingForm
                             ruleSetId={selectedRuleSetId}
                             onCancel={() => setIsGroupMappingModalVisible(false)}
                         />

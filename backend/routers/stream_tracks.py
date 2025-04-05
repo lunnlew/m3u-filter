@@ -27,7 +27,7 @@ FAILURE_BATCH_SIZE = 50
 last_failure_update = time.time()
 FAILURE_UPDATE_INTERVAL = 60  # 秒
 
-async def increment_failure_count(track_id: int, url: str = None):
+async def increment_failure_count(track_id: int, url: str):
     """增加流媒体源的失败计数"""
     global failure_update_queue, last_failure_update
     
@@ -90,7 +90,7 @@ async def batch_update_failures():
         # 如果更新失败，将未更新的记录放回队列
         failure_update_queue.extend(updates)
 
-async def test_stream_url(url: str, track_id: int = None) -> tuple[bool, float, dict]:
+async def test_stream_url(url: str, track_id: int) -> tuple[bool, float, dict]:
     start_time = datetime.now()
     logger.info(f"开始测试流媒体URL: {url}, track_id: {track_id}")
 
@@ -108,8 +108,20 @@ async def test_stream_url(url: str, track_id: int = None) -> tuple[bool, float, 
         return False, 0.0, get_default_stream_info()
 
     try:
-        # 执行探测任务获取码率信息
-        probe_result = await probe_stream(url)
+        # 检测协议类型
+        protocol = detect_stream_protocol(url)
+        logger.info(f"检测到流媒体协议: {protocol}, URL: {url}")
+        
+        # 根据协议类型选择探测方法
+        if protocol == "hls":
+            probe_result = await probe_hls_stream(url)
+        elif protocol == "rtmp":
+            probe_result = await probe_rtmp_stream(url)
+        elif protocol == "rtsp":
+            probe_result = await probe_rtsp_stream(url)
+        else:  # 默认HTTP流
+            probe_result = await probe_stream(url)
+            
         if not probe_result:
             # 只有在域名键值有效时才记录失败
             if domain_key:
@@ -157,7 +169,7 @@ async def test_stream_url(url: str, track_id: int = None) -> tuple[bool, float, 
         logger.error(f"测试流媒体URL时发生错误: {url}, 错误信息: {str(e)}")
         
         if track_id:
-            await increment_failure_count(track_id)
+            await increment_failure_count(track_id, url)
             
         return False, 0.0, get_default_stream_info()
 
@@ -523,7 +535,7 @@ async def process_batch_tasks(task_id: int, track_ids: list):
             partial(mark_task_failed, task_id, str(e))
         )
 
-def get_track_url(track_id: int) -> str:
+def get_track_url(track_id: int) -> Optional[str]:
     with get_db_connection() as conn:
         c = conn.cursor()
         c.execute("SELECT url FROM stream_tracks WHERE id = ?", (track_id,))
@@ -540,6 +552,266 @@ def sync_test_stream_url(url: str, track_id: int) -> tuple[bool, float, dict]:
         loop.close()
 
 async def test_download_speed(url: str, track_id: int, bitrate: int) -> dict:
+    """支持不同协议的下载速度测试"""
+    protocol = detect_stream_protocol(url)
+    
+    if protocol == 'hls':
+        # HLS协议使用分段下载测试
+        return await test_hls_download_speed(url, bitrate)
+    elif protocol in ['rtmp', 'rtsp']:
+        # RTMP/RTSP协议使用特殊参数
+        return await test_rtmp_rtsp_download_speed(url, bitrate)
+    else:
+        # 默认HTTP流测试
+        return await test_http_download_speed(url, bitrate)
+async def test_hls_download_speed(url: str, bitrate: int) -> dict:
+    """HLS协议下载速度测试"""
+    speed = 0.0
+    status = False
+    speed_history = []
+    buffer_health = 0.0
+    
+    try:
+        import m3u8
+        from urllib.parse import urlparse, urljoin
+        
+        # 解析主m3u8文件
+        parsed = urlparse(url)
+        base_url = f"{parsed.scheme}://{parsed.netloc}"
+        
+        # 下载并解析m3u8文件
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url) as resp:
+                if resp.status != 200:
+                    return {
+                        'download_speed': 0.0,
+                        'speed_test_status': False,
+                        'speed_test_time': datetime.now().isoformat(),
+                        'downloaded_bytes': 0,
+                        'duration_seconds': 0.0,
+                        'buffer_health': 0.0,
+                        'stability_score': 0.0,
+                        'quality_score': 0.0
+                    }
+                
+                playlist = m3u8.loads(await resp.text())
+                
+                # 获取前3个片段进行测试
+                segments = playlist.segments[:3] if playlist.segments else []
+                if not segments:
+                    raise ValueError("HLS播放列表中没有找到有效片段")
+                
+                total_size = 0
+                total_duration = 0.0
+                
+                for segment in segments:
+                    segment_url = urljoin(base_url, segment.uri)
+                    try:
+                        async with session.get(segment_url) as seg_resp:
+                            if seg_resp.status == 200:
+                                # 流式下载并计算速度
+                                start_segment = time.time()
+                                size = 0
+                                async for chunk in seg_resp.content.iter_chunked(1024*1024):  # 1MB chunks
+                                    size += len(chunk)
+                                    elapsed = time.time() - start_segment
+                                    if elapsed > 0:
+                                        current_speed = (size * 8) / (elapsed * 1e6)  # Mbps
+                                        speed_history.append(current_speed)
+                                
+                                total_size += size
+                                total_duration += segment.duration or 0
+                                
+                                # 计算缓冲健康度
+                                if bitrate > 0 and segment.duration or 0 > 0:
+                                    segment_bitrate = (size * 8) / (segment.duration or 0 * 1e6)  # Mbps
+                                    buffer_health = segment_bitrate / (bitrate / 1e6)
+                    except Exception as e:
+                        logger.warning(f"HLS片段下载失败: {segment_url}, 错误: {str(e)}")
+                
+                # 计算平均速度
+                if total_duration > 0:
+                    speed = (total_size * 8) / (total_duration * 1e6)  # Mbps
+                    status = speed > (bitrate / 1e6 * 0.8)  # 速度达到码率的80%算成功
+                
+                # 计算稳定性
+                stability_score = 0.0
+                if len(speed_history) > 1:
+                    avg_speed = sum(speed_history) / len(speed_history)
+                    variance = sum((s - avg_speed) ** 2 for s in speed_history) / len(speed_history)
+                    std_dev = variance ** 0.5
+                    stability_score = max(0, 1 - (std_dev / avg_speed)) if avg_speed > 0 else 0.0
+                
+                # 计算质量评分
+                quality_score = min(1.0, speed / (bitrate / 1e6)) if bitrate > 0 else 0.0
+                
+                return {
+                    'download_speed': round(speed, 2),
+                    'speed_test_status': status,
+                    'speed_test_time': datetime.now().isoformat(),
+                    'downloaded_bytes': total_size,
+                    'duration_seconds': round(total_duration, 2),
+                    'buffer_health': round(buffer_health, 2),
+                    'stability_score': round(stability_score, 2),
+                    'quality_score': round(quality_score, 2)
+                }
+                
+    except Exception as e:
+        logger.error(f"HLS测速失败: {url}, 错误: {str(e)}")
+        return {
+            'download_speed': 0.0,
+            'speed_test_status': False,
+            'speed_test_time': datetime.now().isoformat(),
+            'downloaded_bytes': 0,
+            'duration_seconds': 0.0,
+            'buffer_health': 0.0,
+            'stability_score': 0.0,
+            'quality_score': 0.0
+        }
+
+async def test_rtmp_rtsp_download_speed(url: str, bitrate: int) -> dict:
+    """RTMP/RTSP协议下载速度测试"""
+    start_time = time.time()
+    downloaded = 0
+    speed = 0.0
+    status = False
+    speed_history = []
+    buffer_health = 0.0
+    
+    try:
+        import ffmpeg
+        
+        # 根据协议类型设置不同参数
+        protocol = 'rtmp' if url.startswith('rtmp://') else 'rtsp'
+        input_args = {
+            'rtmp': {
+                'rtmp_buffer': 1000,
+                'rtmp_live': 'live',
+                'timeout': 5000000  # 微秒
+            },
+            'rtsp': {
+                'rtsp_transport': 'tcp',
+                'rtsp_flags': 'prefer_tcp',
+                'timeout': 5000000  # 微秒
+            }
+        }.get(protocol, {})
+        
+        process = (
+            ffmpeg
+            .input(url, **input_args, t=10)  # 测试10秒
+            .output('pipe:', format='null')
+            .global_args(
+                '-loglevel', 'info',
+                '-stats',
+                '-progress', 'pipe:2'
+            )
+            .overwrite_output()
+            .run_async(pipe_stdout=True, pipe_stderr=True)
+        )
+        
+        stderr_text = ''
+        current_speed = 0.0
+        downloaded = 0
+        last_size = 0
+        last_time = start_time
+        
+        async def read_output():
+            nonlocal stderr_text, current_speed, downloaded, last_size, last_time, speed_history, buffer_health
+            
+            while True:
+                try:
+                    line = await asyncio.get_event_loop().run_in_executor(
+                        None, 
+                        process.stderr.readline
+                    )
+                    if not line:
+                        break
+                    
+                    line = line.decode('utf-8', errors='ignore')
+                    stderr_text += line
+                    
+                    # 解析RTMP/RTSP特有的输出格式
+                    if 'speed=' in line:
+                        speed_match = re.search(r'speed=\s*([\d.]+)x', line)
+                        if speed_match:
+                            speed_factor = float(speed_match.group(1))
+                            estimated_speed = (bitrate / 1e6) * speed_factor
+                            speed_history.append(estimated_speed)
+                            
+                            # 估算下载量
+                            current_time = time.time()
+                            time_delta = current_time - last_time
+                            if time_delta > 0:
+                                downloaded += int((bitrate * speed_factor) * time_delta / 8)
+                                last_time = current_time
+                            
+                            # 计算缓冲健康度
+                            if bitrate > 0:
+                                buffer_health = estimated_speed / (bitrate / 1e6)
+                            
+                            current_speed = estimated_speed
+                except Exception as e:
+                    logger.error(f"读取输出错误: {str(e)}")
+                    break
+
+        read_task = asyncio.create_task(read_output())
+        
+        try:
+            await asyncio.wait_for(
+                asyncio.get_event_loop().run_in_executor(None, process.wait),
+                timeout=10
+            )
+        except asyncio.TimeoutError:
+            logger.warning(f"{protocol.upper()}测速超时: {url}")
+        finally:
+            try:
+                process.kill()
+            except:
+                pass
+            
+            try:
+                read_task.cancel()
+                await asyncio.sleep(0.1)
+            except:
+                pass
+            
+            # 计算稳定性
+            stability_score = 0.0
+            if len(speed_history) > 1:
+                avg_speed = sum(speed_history) / len(speed_history)
+                variance = sum((s - avg_speed) ** 2 for s in speed_history) / len(speed_history)
+                std_dev = variance ** 0.5
+                stability_score = max(0, 1 - (std_dev / avg_speed)) if avg_speed > 0 else 0.0
+            
+            # 设置最终状态
+            status = (current_speed > 0 and 
+                     buffer_health > 0.6 and 
+                     stability_score > 0.3)
+            
+            return {
+                'download_speed': round(current_speed, 2),
+                'speed_test_status': status,
+                'speed_test_time': datetime.now().isoformat(),
+                'downloaded_bytes': downloaded,
+                'duration_seconds': round(time.time() - start_time, 2),
+                'buffer_health': round(buffer_health, 2),
+                'stability_score': round(stability_score, 2),
+                'quality_score': round(min(1.0, current_speed / (bitrate / 1e6)) if bitrate > 0 else 0.0, 2)
+            }
+    except Exception as e:
+        logger.error(f"测速失败: {url}, 错误: {str(e)}")
+        return {
+            'download_speed': 0.0,
+            'speed_test_status': False,
+            'speed_test_time': datetime.now().isoformat(),
+            'downloaded_bytes': 0,
+            'duration_seconds': 0.0,
+            'buffer_health': 0.0,
+            'stability_score': 0.0,
+            'quality_score': 0.0
+        }
+
+async def test_http_download_speed(url: str, bitrate: int) -> dict:
     """
     使用ffmpeg测试流媒体下载速度
     返回:
@@ -876,3 +1148,73 @@ FAILURE_DECAY_TIME = 1800  # 失败次数衰减时间（秒）
 
 # 域名失败计数缓存
 domain_failures: Dict[str, List[Tuple[datetime, str]]] = {}
+
+def detect_stream_protocol(url: str) -> str:
+    """检测流媒体协议类型"""
+    url_lower = url.lower()
+    if '.m3u8' in url_lower:
+        return 'hls'
+    elif url_lower.startswith('rtmp://'):
+        return 'rtmp'
+    elif url_lower.startswith('rtsp://'):
+        return 'rtsp'
+    elif url_lower.startswith('udp://'):
+        return 'udp'
+    else:
+        return 'http'
+
+
+async def probe_hls_stream(url: str) -> dict:
+    """HLS流探测"""
+    try:
+        import m3u8
+        from urllib.parse import urlparse
+        
+        # 解析主m3u8文件
+        parsed = urlparse(url)
+        base_url = f"{parsed.scheme}://{parsed.netloc}"
+        
+        # 下载并解析m3u8文件
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url) as resp:
+                if resp.status != 200:
+                    return {}
+                
+                playlist = m3u8.loads(await resp.text())
+                
+                # 获取第一个有效片段URL进行测试
+                if playlist.segments:
+                    segment_url = urljoin(base_url, playlist.segments[0].uri)
+                    return await probe_stream(segment_url)
+                
+        return {}
+    except Exception as e:
+        logger.error(f"HLS流探测失败: {url}, 错误: {str(e)}")
+        return {}
+
+async def probe_rtmp_stream(url: str) -> dict:
+    """RTMP流探测"""
+    try:
+        # 使用FFmpeg的特殊参数探测RTMP
+        import ffmpeg
+        probe = ffmpeg.probe(url, timeout=5, rtmp_buffer=1000, rtmp_live='live')
+        return probe if probe else {}
+    except Exception as e:
+        logger.error(f"RTMP流探测失败: {url}, 错误: {str(e)}")
+        return {}
+
+async def probe_rtsp_stream(url: str) -> dict:
+    """RTSP流探测"""
+    try:
+        # 使用FFmpeg的特殊参数探测RTSP
+        import ffmpeg
+        probe = ffmpeg.probe(
+            url, 
+            timeout=5,
+            rtsp_transport='tcp',  # 强制使用TCP传输
+            rtsp_flags='prefer_tcp'
+        )
+        return probe if probe else {}
+    except Exception as e:
+        logger.error(f"RTSP流探测失败: {url}, 错误: {str(e)}")
+        return {}

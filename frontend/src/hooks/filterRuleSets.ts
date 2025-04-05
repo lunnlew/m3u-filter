@@ -11,7 +11,8 @@ import {
   generateTXT,
   deleteGroupMapping,
   batchDeleteGroupMappings,
-  batchUpdateGroupMappings
+  batchUpdateGroupMappings,
+  testRuleSet
 } from '../api/filterRuleSets';
 import type { FilterRuleSet } from '../types/filter';
 import { fetchGroupMappings, updateGroupMapping } from '../api/filterRuleSets';
@@ -195,6 +196,17 @@ export const useBatchDeleteGroupMappings = () => {
     },
     onError: (error: Error) => {
       message.error(`分组映射批量删除失败: ${error.message}`);
+    },
+  });
+};
+
+export const useTestRuleSet = () => {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: testRuleSet,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['filter-rule-sets'] });
     },
   });
 };

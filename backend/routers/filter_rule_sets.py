@@ -10,6 +10,8 @@ from datetime import datetime
 from config import RESOURCE_ROOT
 import json
 import logging
+import asyncio
+
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
@@ -653,3 +655,82 @@ def batch_delete_group_mappings(mappings: List[GroupMapping]):
             )
         conn.commit()
         return BaseResponse.success()
+
+
+@router.post("/filter-rule-sets/{set_id}/test-rules")
+async def test_rules_in_set(
+    set_id: int,
+    test_status: Optional[bool] = None,
+    last_test_before: Optional[str] = None,
+    min_failure_count: Optional[int] = None,
+    max_failure_count: Optional[int] = 5,
+):
+    try:
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            
+            # 首先验证规则集合是否存在且启用
+            cursor.execute(
+                "SELECT enabled FROM filter_rule_sets WHERE id = ?",
+                (set_id,)
+            )
+            result = cursor.fetchone()
+            if not result:
+                return BaseResponse.error(message="规则集合不存在", code=404)
+            if not result[0]:
+                return BaseResponse.error(message="规则集合未启用", code=400)
+
+            # 获取所有频道
+            cursor.execute("""
+                SELECT id, name, url, group_title, test_status, 
+                       last_test_time, probe_failure_count
+                FROM stream_tracks
+            """)
+            columns = [column[0] for column in cursor.description]
+            channels = [dict(zip(columns, row)) for row in cursor.fetchall()]
+
+            # 使用规则树过滤频道，但排除测试相关规则
+            rule_tree = RuleTree()
+            rule_tree.build_from_rule_set_without_test(set_id, conn)  # 使用新方法
+            filtered_channels = rule_tree.filter_channels(channels)
+
+            # 应用测试相关的过滤条件
+            test_channels = []
+            for channel in filtered_channels:
+                if (test_status is None or channel.get('test_status') == test_status) and \
+                   (last_test_before is None or 
+                    channel.get('last_test_time') is None or 
+                    channel.get('last_test_time') < last_test_before) and \
+                   (min_failure_count is None or 
+                    (channel.get('probe_failure_count') or 0) >= min_failure_count) and \
+                   (max_failure_count is None or 
+                    (channel.get('probe_failure_count') or 0) < max_failure_count):
+                    test_channels.append(channel)
+
+            if not test_channels:
+                return BaseResponse.error(message="没有找到符合条件的频道", code=404)
+            
+            # 创建测试任务
+            cursor.execute("""
+                INSERT INTO stream_tasks (
+                    task_type, status, total_items
+                ) VALUES (?, ?, ?)
+            """, ('rule_test', 'pending', len(test_channels)))
+            task_id = cursor.lastrowid
+            conn.commit()
+            
+            # 启动后台处理任务
+            from .stream_tracks import process_batch_tasks
+            asyncio.create_task(process_batch_tasks(task_id, [c['id'] for c in test_channels]))
+            
+            return BaseResponse.success(
+                data={
+                    "task_id": task_id,
+                    "total_tracks": len(test_channels)
+                },
+                message=f"规则测试任务已创建，任务ID: {task_id}"
+            )
+            
+    except Exception as e:
+        logger.error(f"创建规则测试任务失败: {str(e)}")
+        return BaseResponse.error(message=f"创建测试任务失败: {str(e)}", code=500)

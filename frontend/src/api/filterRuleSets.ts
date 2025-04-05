@@ -121,3 +121,16 @@ export const batchDeleteGroupMappings = async (mappings: GroupMapping[]): Promis
     data: mappings
   });
 };
+
+
+export const testRuleSet = async (ruleSetId: number) => {
+  const response = await fetch(`/api/filter-rule-sets/${ruleSetId}/test-rules`, {
+    method: 'POST',
+  });
+  
+  if (!response.ok) {
+    throw new Error('测试规则集合失败');
+  }
+  
+  return response.json();
+};

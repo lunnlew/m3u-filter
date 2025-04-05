@@ -1,3 +1,4 @@
+import re
 import sqlite3
 from queue import Queue
 from contextlib import contextmanager
@@ -19,6 +20,12 @@ def init_db_pool():
     
     # 初始化数据库结构
     init_db()
+
+def regexp(pattern, text):
+    try:
+        return bool(re.search(pattern, text)) if text is not None else False
+    except re.error:
+        return False
 
 @contextmanager
 def get_db_connection():

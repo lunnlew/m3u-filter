@@ -11,3 +11,4 @@ aiofiles
 psutil
 ping3
 pyinstaller
+m3u8

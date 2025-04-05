@@ -186,6 +186,54 @@ class RuleTree:
         
         return node
     
+    
+    def build_from_rule_set_without_test(self, rule_set_id: int, conn) -> None:
+        """从数据库中的规则集合构建规则树"""
+        cursor = conn.cursor()
+        # 递归构建规则树
+        self.root = self._build_node_from_rule_set_without_test(rule_set_id, cursor)
+    
+    
+    def _build_node_from_rule_set_without_test(self, rule_set_id: int, cursor) -> RuleNode:
+        """从规则集合ID构建节点"""
+        # 获取规则集合信息
+        cursor.execute(
+            "SELECT id, name, enabled, logic_type FROM filter_rule_sets WHERE id = ?", 
+            (rule_set_id,)
+        )
+        rule_set = cursor.fetchone()
+        if not rule_set or not rule_set[2]:  # 如果规则集合不存在或未启用
+            return RuleNode()
+        
+        # 创建节点
+        node = RuleNode(logic_type=rule_set[3] or 'AND')
+        
+        # 添加规则
+        cursor.execute("""
+            SELECT fr.* 
+            FROM filter_rules fr
+            INNER JOIN filter_rule_set_mappings frsm ON fr.id = frsm.rule_id
+            WHERE frsm.rule_set_id = ? AND fr.enabled = 1 AND fr.type NOT IN ('resolution', 'bitrate', 'status')
+        """, (rule_set_id,))
+        rules = cursor.fetchall()
+        for rule in rules:
+            # 假设有一个函数可以将数据库行转换为FilterRule对象
+            filter_rule = self._row_to_filter_rule(rule)
+            node.add_rule(filter_rule)
+        
+        # 添加子规则集合
+        cursor.execute("""
+            SELECT child_set_id 
+            FROM filter_rule_set_children 
+            WHERE parent_set_id = ?
+        """, (rule_set_id,))
+        child_ids = [row[0] for row in cursor.fetchall()]
+        for child_id in child_ids:
+            child_node = self._build_node_from_rule_set_without_test(child_id, cursor)
+            node.add_child(child_node)
+        
+        return node
+    
     def _row_to_filter_rule(self, row) -> FilterRule:
         """将数据库行转换为FilterRule对象"""
         return FilterRule(
