@@ -84,7 +84,7 @@ async def batch_update_failures():
                 WHERE id = ?
             """, [(u['timestamp'], u['track_id']) for u in updates])
             conn.commit()
-            logger.debug(f"批量更新了 {len(updates)} 个频道的失败计数")
+            logger.info(f"批量更新了 {len(updates)} 个频道的失败计数")
     except Exception as e:
         logger.error(f"批量更新失败计数时出错: {str(e)}")
         # 如果更新失败，将未更新的记录放回队列
@@ -93,6 +93,26 @@ async def batch_update_failures():
 async def test_stream_url(url: str, track_id: int) -> tuple[bool, float, dict]:
     start_time = datetime.now()
     logger.info(f"开始测试流媒体URL: {url}, track_id: {track_id}")
+
+    # 解析URL获取主机名
+    parsed_url = urlparse(url)
+    hostname = parsed_url.hostname
+    
+    # 检查是否为IPv6地址
+    if hostname and is_ipv6_address(hostname):
+        # 检查系统是否支持IPv6
+        if not await check_ipv6_connectivity():
+            logger.warning(f"系统不支持IPv6，跳过测试: {url}")
+            return False, 0.0, get_default_stream_info()
+        logger.info(f"检测到IPv6地址，系统支持IPv6，继续测试: {url}")
+
+    # 检查域名是否在黑名单中
+    domain_key = get_domain_key(url)
+    if not domain_key:
+        logger.error(f"无法获取有效的域名键值: {url}")
+        if track_id:
+            await increment_failure_count(track_id, url)
+        return False, 0.0, get_default_stream_info()
 
     # 检查域名是否在黑名单中
     domain_key = get_domain_key(url)
@@ -113,12 +133,8 @@ async def test_stream_url(url: str, track_id: int) -> tuple[bool, float, dict]:
         logger.info(f"检测到流媒体协议: {protocol}, URL: {url}")
         
         # 根据协议类型选择探测方法
-        if protocol == "hls":
-            probe_result = await probe_hls_stream(url)
-        elif protocol == "rtmp":
+        if protocol in ["rtmp", "rtsp"]:  # 合并 RTMP 和 RTSP 的处理
             probe_result = await probe_rtmp_stream(url)
-        elif protocol == "rtsp":
-            probe_result = await probe_rtsp_stream(url)
         else:  # 默认HTTP流
             probe_result = await probe_stream(url)
             
@@ -131,31 +147,31 @@ async def test_stream_url(url: str, track_id: int) -> tuple[bool, float, dict]:
             return False, 0.0, get_default_stream_info()
             
         # 从探测结果中获取码率
-        logger.debug(f"开始提取码率信息: {url}")
+        logger.info(f"开始提取码率信息: {url}")
         bitrate = await extract_bitrate(probe_result)
-        logger.debug(f"码率提取完成: {url}, bitrate: {bitrate/1024/1024:.2f}Mbps")
+        logger.info(f"码率提取完成: {url}, bitrate: {bitrate/1024/1024:.2f}Mbps")
         
         # 执行ping测试
-        logger.debug(f"开始执行Ping测试: {url}")
+        logger.info(f"开始执行Ping测试: {url}")
         ping_time = await ping_url(url)
-        logger.debug(f"Ping测试完成: {url}, ping_time: {ping_time}ms")
+        logger.info(f"Ping测试完成: {url}, ping_time: {ping_time}ms")
         
         # 执行下载速度测试
-        logger.debug(f"开始执行下载速度测试: {url}")
+        logger.info(f"开始执行下载速度测试: {url}")
         speed_info = await test_download_speed(url, track_id, bitrate) if track_id else {
             'download_speed': 0.0,
             'speed_test_status': False,
             'speed_test_time': None
         }
-        logger.debug(f"下载速度测试完成: {url}, speed_info: {speed_info}")
+        logger.info(f"下载速度测试完成: {url}, speed_info: {speed_info}")
 
         # 计算总耗时
         duration = (datetime.now() - start_time).total_seconds()
 
         # 解析流媒体信息
-        logger.debug(f"开始解析流媒体信息: {url}")
+        logger.info(f"开始解析流媒体信息: {url}")
         stream_info = await extract_stream_info(probe_result, ping_time, speed_info)
-        logger.debug(f"流媒体信息解析完成: {url}, stream_info: {stream_info}")
+        logger.info(f"流媒体信息解析完成: {url}, stream_info: {stream_info}")
 
         # 根据速度测试结果确定状态
         status = speed_info.get('speed_test_status', False)
@@ -181,52 +197,67 @@ async def probe_stream(url: str) -> dict:
         logger.error("ffmpeg-python库未安装")
         return {}
 
-    # 设置ffmpeg探测参数
-    probe_options = {
-        'v': 'error',      # 只显示错误信息
-        'timeout': '10',   # 设置超时时间为10秒
-        'show_entries': (
-            'stream=codec_name,width,height,codec_type,bit_rate,r_frame_rate,'
-            'avg_frame_rate,max_bit_rate,tags,'
-            'format=bit_rate,size,duration'
-        ),
-        'show_format': None,
-        'show_streams': None
-    }
-    # 异步执行ffmpeg探测，并设置超时处理
-    async def probe_with_timeout(timeout):
-        try:
-            probe_future = asyncio.get_event_loop().run_in_executor(
-                None,
-                lambda: ffmpeg.probe(url, **probe_options)
-            )
-            return await asyncio.wait_for(probe_future, timeout)
-        except ffmpeg.Error as fe:
-            logger.error(f"FFmpeg探测失败: {url}, {str(getattr(fe, 'stderr', str(fe)))}")
-            return {}
-        except asyncio.TimeoutError:
-            logger.error(f"FFmpeg探测超时: {url}")
-            # 清理超时进程
-            try:
-                import psutil
-                for proc in psutil.process_iter(['pid', 'name']):
-                    if 'probe' in proc.info['name'].lower():
-                        proc.kill()
-            except Exception as e:
-                logger.error(f"清理FFmpeg进程失败: {str(e)}")
-            return {}
-        except Exception as e:
-            logger.error(f"FFmpeg探测出现未知错误: {url}, {str(e)}")
-            return {}
-
+    process = None
     try:
-        probe = await probe_with_timeout(5)
+        # 设置ffmpeg探测参数
+        probe_options = {
+            'v': 'error',
+            'timeout': '5',
+            'show_entries': (
+                'stream=codec_name,width,height,codec_type,bit_rate,r_frame_rate,'
+                'avg_frame_rate,max_bit_rate,tags,'
+                'format=bit_rate,size,duration'
+            ),
+            'show_format': None,
+            'show_streams': None
+        }
+
+        # 异步执行ffmpeg探测，并设置超时处理
+        probe_future = asyncio.get_event_loop().run_in_executor(
+            ffmpeg_executor,
+            lambda: ffmpeg.probe(url, **probe_options)
+        )
+        probe = await asyncio.wait_for(probe_future, timeout=5)
+        
         if probe:
             logger.info(f"FFmpeg探测成功: {url}")
         return probe
-    except Exception as e:
-        logger.error(f"FFmpeg探测过程出现异常: {url}, {str(e)}")
+    except ffmpeg.Error as fe:
+        logger.error(f"FFmpeg探测失败: {url}, {str(getattr(fe, 'stderr', str(fe)))}")
+        # 清理超时进程
+        await cleanup_ffmpeg_processes()
         return {}
+    except asyncio.TimeoutError:
+        logger.error(f"FFmpeg探测超时: {url}")
+        # 清理超时进程
+        await cleanup_ffmpeg_processes()
+        return {}
+    except Exception as e:
+        logger.error(f"FFmpeg探测失败: {url}, 错误: {str(e)}") # 清理超时进程
+        await cleanup_ffmpeg_processes()
+        return {}
+        
+    finally:
+        if process:
+            try:
+                process.kill()
+            except:
+                pass
+
+async def cleanup_ffmpeg_processes():
+    """清理FFmpeg进程"""
+    try:
+        import psutil
+        for proc in psutil.process_iter(['pid', 'name']):
+            try:
+                if 'ffmpeg' in proc.info['name'].lower():
+                    proc.kill()
+                if 'probe' in proc.info['name'].lower():
+                    proc.kill()
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                pass
+    except Exception as e:
+        logger.error(f"清理FFmpeg进程失败: {str(e)}")
 
 # 添加结果更新队列
 track_result_queue = []
@@ -261,7 +292,7 @@ async def batch_update_track_results():
                   u['track_id']) for u in updates]
             )
             conn.commit()
-            logger.debug(f"批量更新了 {len(updates)} 个频道的测试结果")
+            logger.info(f"批量更新了 {len(updates)} 个频道的测试结果")
     except Exception as e:
         logger.error(f"批量更新测试结果时出错: {str(e)}")
         # 如果更新失败，将未更新的记录放回队列
@@ -281,9 +312,9 @@ async def test_stream_track(track_id: int):
                 return
             
             url = result[0]
-            logger.debug(f"开始测试频道URL: {url}, track_id={track_id}")
+            logger.info(f"开始测试频道URL: {url}, track_id={track_id}")
             status, speed, stream_info = await test_stream_url(url, track_id)
-            logger.debug(f"频道测试完成: track_id={track_id}, status={status}, speed={speed}")
+            logger.info(f"频道测试完成: track_id={track_id}, status={status}, speed={speed}")
             
             # 将测试结果添加到更新队列
             track_result_queue.append({
@@ -426,114 +457,130 @@ async def test_all_tracks():
             message=f"批量测试任务已创建，任务ID: {task_id}"
         )
 
-# 创建线程池执行器
-ffmpeg_executor = ThreadPoolExecutor(max_workers=3, thread_name_prefix="ffmpeg_worker")
-db_executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="db_worker")
+# 修改线程池配置和资源管理
+ffmpeg_executor = ThreadPoolExecutor(
+    max_workers=4, 
+    thread_name_prefix="ffmpeg_worker",
+    initializer=lambda: logger.info("FFmpeg worker initialized")
+)
+db_executor = ThreadPoolExecutor(
+    max_workers=4, 
+    thread_name_prefix="db_worker",
+    initializer=lambda: logger.info("DB worker initialized")
+)
 
-async def process_batch_tasks(task_id: int, track_ids: list):
-    logger.info(f"开始处理批量任务 {task_id}")
+async def process_batch_tasks(task_id: int, track_ids: List[int]):
+    """处理批量测试任务"""
+    BATCH_SIZE = 10  # 每批测试的频道数
+    MAX_CONCURRENT = 10  # 最大并发数
     
-    # 优化并发设置以提高处理速度
-    semaphore = asyncio.Semaphore(15)  # 从5增加到15
-    batch_size = 30  # 从10增加到30
-    results = {}
-    
-    # 检查IPv6可访问性
-    ipv6_available = await check_ipv6_connectivity()
-    logger.info(f"IPv6可访问性检查结果: {ipv6_available}")
-    
+    total_count = len(track_ids)
+    processed_count = 0
+    success_count = 0
+    failed_count = 0
+    batch_results = []
+    error_records = []
+    semaphore = asyncio.Semaphore(MAX_CONCURRENT)
+
+    async def test_single_track(track_id: int):
+        """测试单个频道的包装函数"""
+        async with semaphore:
+            try:
+                with get_db_connection() as conn:
+                    cursor = conn.cursor()
+                    cursor.execute("SELECT url FROM stream_tracks WHERE id = ?", (track_id,))
+                    result = cursor.fetchone()
+                    if not result:
+                        return {
+                            'track_id': track_id,
+                            'status': False,
+                            'error': '频道不存在'
+                        }
+                    url = result[0]
+
+                # 执行测试
+                status, latency, stream_info = await test_stream_url(url, track_id)
+                
+                # 更新测试结果
+                update_track_result(track_id, status, latency, stream_info)
+                
+                return {
+                    'track_id': track_id,
+                    'status': status,
+                    'latency': latency,
+                    'error': None if status else '测试未通过',
+                    **stream_info
+                }
+            except Exception as e:
+                error_msg = str(e)
+                logger.error(f"处理频道 {track_id} 时出错: {error_msg}")
+                return {
+                    'track_id': track_id,
+                    'status': False,
+                    'error': error_msg
+                }
+
     try:
-        async def process_single_track(track_id: int):
-            async with semaphore:
-                try:
-                    # 获取URL
-                    url = await asyncio.get_event_loop().run_in_executor(
-                        db_executor,
-                        partial(get_track_url, track_id)
-                    )
-                    if not url:
-                        return {
-                            'track_id': track_id,
-                            'status': 'failed',
-                            'error': 'URL not found',
-                            'timestamp': datetime.now().isoformat()
-                        }
-                    
-                    # 检查URL是否是IPv6地址
-                    parsed_url = urlparse(url)
-                    host = parsed_url.hostname
-                    is_ipv6 = ':' in host if host else False
-                    
-                    # 如果是IPv6地址但IPv6不可用，则跳过测试
-                    if is_ipv6 and not ipv6_available:
-                        logger.warning(f"跳过IPv6地址测试 (IPv6不可用): {url}")
-                        return {
-                            'track_id': track_id,
-                            'status': 'skipped',
-                            'error': 'IPv6 not available',
-                            'timestamp': datetime.now().isoformat()
-                        }
-                    
-                    # 在线程池中执行FFmpeg探测
-                    status, speed, stream_info = await asyncio.get_event_loop().run_in_executor(
-                        ffmpeg_executor,
-                        partial(sync_test_stream_url, url, track_id)
-                    )
-                    
-                    # 在单独的线程中更新数据库
-                    await asyncio.get_event_loop().run_in_executor(
-                        db_executor,
-                        partial(update_track_result, track_id, status, speed, stream_info)
-                    )
-                    
-                    return {
-                        'track_id': track_id,
-                        'status': 'success',
-                        'timestamp': datetime.now().isoformat()
-                    }
-                except Exception as e:
-                    logger.error(f"处理track_id={track_id}失败: {str(e)}")
-                    return {
-                        'track_id': track_id,
-                        'status': 'failed',
-                        'error': str(e),
-                        'timestamp': datetime.now().isoformat()
-                    }
-
-        # 分批处理任务
-        for i in range(0, len(track_ids), batch_size):
-            batch = track_ids[i:i + batch_size]
-            batch_tasks = [process_single_track(track_id) for track_id in batch]
-            batch_results = await asyncio.gather(*batch_tasks)
+        # 将频道ID列表分批处理
+        for i in range(0, len(track_ids), BATCH_SIZE):
+            batch = track_ids[i:i + BATCH_SIZE]
             
-            # 批量更新任务状态
-            processed_count = i + len(batch)
-            await asyncio.get_event_loop().run_in_executor(
-                db_executor,
-                partial(
-                    update_task_progress,
-                    task_id,
-                    processed_count,
-                    len(track_ids),
-                    batch_results
-                )
+            # 并发执行当前批次的测试
+            batch_tasks = [test_single_track(track_id) for track_id in batch]
+            results = await asyncio.gather(*batch_tasks)
+            
+            # 处理每个频道的测试结果
+            for result in results:
+                processed_count += 1
+                
+                if result['status']:
+                    success_count += 1
+                    batch_results.append(result)
+                else:
+                    failed_count += 1
+                    error_records.append({
+                        'track_id': result['track_id'],
+                        'error': result['error']
+                    })
+                    # 如果不是"频道不存在"错误，也添加到结果列表
+                    if result['error'] != '频道不存在':
+                        batch_results.append(result)
+            
+            # 更新任务进度
+            update_task_progress(task_id, processed_count, total_count, batch_results)
+            logger.info(
+                f"任务进度: {processed_count}/{total_count} "
+                f"(成功: {success_count}, 失败: {failed_count})"
             )
             
-            # 短暂暂停
-            await asyncio.sleep(0.1)
+            # 可选：在批次之间添加短暂延迟，避免过度并发
+            await asyncio.sleep(0.5)
+
+        # 任务完成，更新最终状态
+        final_results = {
+            'results': {str(r['track_id']): r for r in batch_results},
+            'statistics': {
+                'total': total_count,
+                'processed': processed_count,
+                'success': success_count,
+                'failed': failed_count
+            },
+            'errors': error_records
+        }
         
-        # 标记任务完成
-        await asyncio.get_event_loop().run_in_executor(
-            db_executor,
-            partial(mark_task_completed, task_id, results)
-        )
+        if failed_count == total_count:
+            mark_task_failed(task_id, "所有频道测试失败")
+        else:
+            mark_task_completed(task_id, final_results)
             
-    except Exception as e:
-        logger.error(f"批量任务处理失败 {task_id}: {str(e)}")
-        await asyncio.get_event_loop().run_in_executor(
-            db_executor,
-            partial(mark_task_failed, task_id, str(e))
+        logger.info(
+            f"批量测试任务 {task_id} 完成，"
+            f"总数: {total_count}, 成功: {success_count}, 失败: {failed_count}"
         )
+
+    except Exception as e:
+        logger.error(f"批量测试任务 {task_id} 执行失败: {str(e)}")
+        mark_task_failed(task_id, str(e))
 
 def get_track_url(track_id: int) -> Optional[str]:
     with get_db_connection() as conn:
@@ -555,125 +602,17 @@ async def test_download_speed(url: str, track_id: int, bitrate: int) -> dict:
     """支持不同协议的下载速度测试"""
     protocol = detect_stream_protocol(url)
     
-    if protocol == 'hls':
-        # HLS协议使用分段下载测试
-        return await test_hls_download_speed(url, bitrate)
-    elif protocol in ['rtmp', 'rtsp']:
+    if protocol in ['rtmp', 'rtsp']:
         # RTMP/RTSP协议使用特殊参数
         return await test_rtmp_rtsp_download_speed(url, bitrate)
     else:
         # 默认HTTP流测试
         return await test_http_download_speed(url, bitrate)
-async def test_hls_download_speed(url: str, bitrate: int) -> dict:
-    """HLS协议下载速度测试"""
-    speed = 0.0
-    status = False
-    speed_history = []
-    buffer_health = 0.0
-    
-    try:
-        import m3u8
-        from urllib.parse import urlparse, urljoin
-        
-        # 解析主m3u8文件
-        parsed = urlparse(url)
-        base_url = f"{parsed.scheme}://{parsed.netloc}"
-        
-        # 下载并解析m3u8文件
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url) as resp:
-                if resp.status != 200:
-                    return {
-                        'download_speed': 0.0,
-                        'speed_test_status': False,
-                        'speed_test_time': datetime.now().isoformat(),
-                        'downloaded_bytes': 0,
-                        'duration_seconds': 0.0,
-                        'buffer_health': 0.0,
-                        'stability_score': 0.0,
-                        'quality_score': 0.0
-                    }
-                
-                playlist = m3u8.loads(await resp.text())
-                
-                # 获取前3个片段进行测试
-                segments = playlist.segments[:3] if playlist.segments else []
-                if not segments:
-                    raise ValueError("HLS播放列表中没有找到有效片段")
-                
-                total_size = 0
-                total_duration = 0.0
-                
-                for segment in segments:
-                    segment_url = urljoin(base_url, segment.uri)
-                    try:
-                        async with session.get(segment_url) as seg_resp:
-                            if seg_resp.status == 200:
-                                # 流式下载并计算速度
-                                start_segment = time.time()
-                                size = 0
-                                async for chunk in seg_resp.content.iter_chunked(1024*1024):  # 1MB chunks
-                                    size += len(chunk)
-                                    elapsed = time.time() - start_segment
-                                    if elapsed > 0:
-                                        current_speed = (size * 8) / (elapsed * 1e6)  # Mbps
-                                        speed_history.append(current_speed)
-                                
-                                total_size += size
-                                total_duration += segment.duration or 0
-                                
-                                # 计算缓冲健康度
-                                if bitrate > 0 and segment.duration or 0 > 0:
-                                    segment_bitrate = (size * 8) / (segment.duration or 0 * 1e6)  # Mbps
-                                    buffer_health = segment_bitrate / (bitrate / 1e6)
-                    except Exception as e:
-                        logger.warning(f"HLS片段下载失败: {segment_url}, 错误: {str(e)}")
-                
-                # 计算平均速度
-                if total_duration > 0:
-                    speed = (total_size * 8) / (total_duration * 1e6)  # Mbps
-                    status = speed > (bitrate / 1e6 * 0.8)  # 速度达到码率的80%算成功
-                
-                # 计算稳定性
-                stability_score = 0.0
-                if len(speed_history) > 1:
-                    avg_speed = sum(speed_history) / len(speed_history)
-                    variance = sum((s - avg_speed) ** 2 for s in speed_history) / len(speed_history)
-                    std_dev = variance ** 0.5
-                    stability_score = max(0, 1 - (std_dev / avg_speed)) if avg_speed > 0 else 0.0
-                
-                # 计算质量评分
-                quality_score = min(1.0, speed / (bitrate / 1e6)) if bitrate > 0 else 0.0
-                
-                return {
-                    'download_speed': round(speed, 2),
-                    'speed_test_status': status,
-                    'speed_test_time': datetime.now().isoformat(),
-                    'downloaded_bytes': total_size,
-                    'duration_seconds': round(total_duration, 2),
-                    'buffer_health': round(buffer_health, 2),
-                    'stability_score': round(stability_score, 2),
-                    'quality_score': round(quality_score, 2)
-                }
-                
-    except Exception as e:
-        logger.error(f"HLS测速失败: {url}, 错误: {str(e)}")
-        return {
-            'download_speed': 0.0,
-            'speed_test_status': False,
-            'speed_test_time': datetime.now().isoformat(),
-            'downloaded_bytes': 0,
-            'duration_seconds': 0.0,
-            'buffer_health': 0.0,
-            'stability_score': 0.0,
-            'quality_score': 0.0
-        }
 
 async def test_rtmp_rtsp_download_speed(url: str, bitrate: int) -> dict:
     """RTMP/RTSP协议下载速度测试"""
     start_time = time.time()
     downloaded = 0
-    speed = 0.0
     status = False
     speed_history = []
     buffer_health = 0.0
@@ -759,7 +698,7 @@ async def test_rtmp_rtsp_download_speed(url: str, bitrate: int) -> dict:
         try:
             await asyncio.wait_for(
                 asyncio.get_event_loop().run_in_executor(None, process.wait),
-                timeout=10
+                timeout=5
             )
         except asyncio.TimeoutError:
             logger.warning(f"{protocol.upper()}测速超时: {url}")
@@ -839,7 +778,7 @@ async def test_http_download_speed(url: str, bitrate: int) -> dict:
         # 创建ffmpeg进程，设置超时和输出格式
         process = (
             ffmpeg
-            .input(url, t=15)  # 增加测试时间到15秒以获取更准确的稳定性数据
+            .input(url, t=6)  # 增加测试时间到6秒以获取更准确的稳定性数据
             .output('pipe:', format='null')  # 输出到空设备
             .global_args(
                 '-loglevel', 'info',  # 设置日志级别
@@ -893,7 +832,7 @@ async def test_http_download_speed(url: str, bitrate: int) -> dict:
                                 # 确保添加有效的速度值到历史记录
                                 if instant_speed > 0:
                                     speed_history.append(instant_speed)
-                                    logger.debug(f"添加速度历史记录: {instant_speed:.2f}Mbps, 当前历史记录数: {len(speed_history)}")
+                                    logger.info(f"添加速度历史记录: {instant_speed:.2f}Mbps, 当前历史记录数: {len(speed_history)}")
                                 
                                 # 更新最后的大小和时间
                                 last_size = current_size
@@ -908,7 +847,7 @@ async def test_http_download_speed(url: str, bitrate: int) -> dict:
                                 # 也将估算的速度添加到历史记录
                                 if estimated_speed > 0:
                                     speed_history.append(estimated_speed)
-                                    logger.debug(f"添加估算速度到历史记录: {estimated_speed:.2f}Mbps, 当前历史记录数: {len(speed_history)}")
+                                    logger.info(f"添加估算速度到历史记录: {estimated_speed:.2f}Mbps, 当前历史记录数: {len(speed_history)}")
                                 downloaded = int((bitrate * speed_factor) * (current_time - start_time) / 8)
                         
                         # 计算持续时间（即使没有size信息）
@@ -931,13 +870,13 @@ async def test_http_download_speed(url: str, bitrate: int) -> dict:
                             buffer_ratio = (current_speed * 1e6) / bitrate
                             # 修改为：允许超过1.0的值，表示有额外缓冲能力
                             buffer_health = buffer_ratio
-                            logger.debug(f"缓冲健康度计算: 速度={current_speed:.2f}Mbps, 码率={bitrate/1e6:.2f}Mbps, 比率={buffer_ratio:.2f}")
+                            logger.info(f"缓冲健康度计算: 速度={current_speed:.2f}Mbps, 码率={bitrate/1e6:.2f}Mbps, 比率={buffer_ratio:.2f}")
                         
                         # 最低速度限制和日志记录
                         current_speed = max(current_speed, 0.1) if current_speed > 0 else 0.1
                         
                         # 调试日志包含数据来源信息
-                        logger.debug(f"速度计算方式: {'实际数据' if size_match else '估算'} | "
+                        logger.info(f"速度计算方式: {'实际数据' if size_match else '估算'} | "
                                     f"速度: {current_speed:.2f}Mbps 持续时间: {duration:.2f}s | "
                                     f"缓冲健康度: {buffer_health:.2f}")
 
@@ -949,10 +888,10 @@ async def test_http_download_speed(url: str, bitrate: int) -> dict:
         read_task = asyncio.create_task(read_output())
         
         try:
-            # 等待进程完成，最多15秒
+            # 等待进程完成，最多5秒
             await asyncio.wait_for(
                 asyncio.get_event_loop().run_in_executor(None, process.wait),
-                timeout=15
+                timeout=5
             )
         except asyncio.TimeoutError:
             logger.warning(f"测速超时: {url}")
@@ -972,7 +911,7 @@ async def test_http_download_speed(url: str, bitrate: int) -> dict:
             
             # 计算速度稳定性
             stability_score = 0.0
-            logger.debug(f"计算稳定性，速度历史记录数: {len(speed_history)}")
+            logger.info(f"计算稳定性，速度历史记录数: {len(speed_history)}")
             
             if len(speed_history) > 1:
                 # 计算速度的标准差与平均值的比率，越小越稳定
@@ -984,11 +923,11 @@ async def test_http_download_speed(url: str, bitrate: int) -> dict:
                     # 如果标准差非常大，可能导致负值，所以使用max确保最小为0
                     coefficient = min(std_dev / avg_speed, 1.0)  # 限制系数最大为1
                     stability_score = max(0, 1 - coefficient)
-                    logger.debug(f"稳定性计算: 平均速度={avg_speed:.2f}, 标准差={std_dev:.2f}, 系数={coefficient:.2f}, 稳定性评分={stability_score:.2f}")
+                    logger.info(f"稳定性计算: 平均速度={avg_speed:.2f}, 标准差={std_dev:.2f}, 系数={coefficient:.2f}, 稳定性评分={stability_score:.2f}")
             else:
                 # 如果没有足够的历史记录，给一个默认的中等稳定性评分
                 stability_score = 0.5
-                logger.debug(f"历史记录不足，使用默认稳定性评分: {stability_score}")
+                logger.info(f"历史记录不足，使用默认稳定性评分: {stability_score}")
             
             # 计算综合质量评分 (结合速度、缓冲健康度和稳定性)
             quality_score = 0.0
@@ -1163,58 +1102,64 @@ def detect_stream_protocol(url: str) -> str:
     else:
         return 'http'
 
-
-async def probe_hls_stream(url: str) -> dict:
-    """HLS流探测"""
-    try:
-        import m3u8
-        from urllib.parse import urlparse
-        
-        # 解析主m3u8文件
-        parsed = urlparse(url)
-        base_url = f"{parsed.scheme}://{parsed.netloc}"
-        
-        # 下载并解析m3u8文件
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url) as resp:
-                if resp.status != 200:
-                    return {}
-                
-                playlist = m3u8.loads(await resp.text())
-                
-                # 获取第一个有效片段URL进行测试
-                if playlist.segments:
-                    segment_url = urljoin(base_url, playlist.segments[0].uri)
-                    return await probe_stream(segment_url)
-                
-        return {}
-    except Exception as e:
-        logger.error(f"HLS流探测失败: {url}, 错误: {str(e)}")
-        return {}
-
 async def probe_rtmp_stream(url: str) -> dict:
-    """RTMP流探测"""
+    """RTMP/RTSP流探测"""
     try:
-        # 使用FFmpeg的特殊参数探测RTMP
         import ffmpeg
-        probe = ffmpeg.probe(url, timeout=5, rtmp_buffer=1000, rtmp_live='live')
-        return probe if probe else {}
-    except Exception as e:
-        logger.error(f"RTMP流探测失败: {url}, 错误: {str(e)}")
+    except ImportError:
+        logger.error("ffmpeg-python库未安装")
         return {}
 
-async def probe_rtsp_stream(url: str) -> dict:
-    """RTSP流探测"""
     try:
-        # 使用FFmpeg的特殊参数探测RTSP
-        import ffmpeg
-        probe = ffmpeg.probe(
-            url, 
-            timeout=5,
-            rtsp_transport='tcp',  # 强制使用TCP传输
-            rtsp_flags='prefer_tcp'
+        # 设置较短的超时时间和特定的协议参数
+        probe_options = {
+            'v': 'error',
+            'timeout': '5',  # 5秒超时
+            'analyzeduration': '2000000',  # 分析持续时间2秒
+            'probesize': '1000000',  # 探测大小限制为1MB
+            'show_entries': (
+                'stream=codec_name,width,height,codec_type,bit_rate,'
+                'r_frame_rate,avg_frame_rate,max_bit_rate'
+            ),
+            'show_format': None,
+            'show_streams': None
+        }
+
+        # 根据协议类型添加特定参数
+        if url.startswith('rtsp://'):
+            probe_options.update({
+                'rtsp_transport': 'tcp',  # 使用TCP传输
+                'rtsp_flags': 'prefer_tcp'  # 优先使用TCP
+            })
+        elif url.startswith('rtmp://'):
+            probe_options.update({
+                'rtmp_buffer': '100000',  # RTMP缓冲大小
+                'rtmp_live': 'live'  # 直播模式
+            })
+
+        # 异步执行ffmpeg探测，设置严格的超时控制
+        probe_future = asyncio.get_event_loop().run_in_executor(
+            ffmpeg_executor,
+            lambda: ffmpeg.probe(url, **probe_options)
         )
-        return probe if probe else {}
+        
+        # 设置5秒超时
+        probe = await asyncio.wait_for(probe_future, timeout=5)
+        
+        if probe:
+            logger.info(f"RTMP/RTSP探测成功: {url}")
+            return probe
+            
+    except asyncio.TimeoutError:
+        logger.error(f"RTMP/RTSP探测超时: {url}")
+        # 清理超时进程
+        await cleanup_ffmpeg_processes()
+    except ffmpeg.Error as e:
+        error_message = str(getattr(e, 'stderr', str(e)))
+        logger.error(f"RTMP/RTSP探测失败: {url}, {error_message}")
+        await cleanup_ffmpeg_processes()
     except Exception as e:
-        logger.error(f"RTSP流探测失败: {url}, 错误: {str(e)}")
-        return {}
+        logger.error(f"RTMP/RTSP探测出错: {url}, 错误: {str(e)}")
+        await cleanup_ffmpeg_processes()
+        
+    return {}

@@ -680,11 +680,13 @@ async def test_rules_in_set(
             if not result[0]:
                 return BaseResponse.error(message="规则集合未启用", code=400)
 
-            # 获取所有频道
+            # 获取所有频道，跳过1小时内测试过的
             cursor.execute("""
                 SELECT id, name, url, group_title, test_status, 
                        last_test_time, probe_failure_count
                 FROM stream_tracks
+                WHERE last_test_time IS NULL 
+                   OR datetime(last_test_time) <= datetime('now', '-1 hour')
             """)
             columns = [column[0] for column in cursor.description]
             channels = [dict(zip(columns, row)) for row in cursor.fetchall()]

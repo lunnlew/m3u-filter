@@ -456,7 +456,12 @@ def parse_m3u_content(content: str) -> tuple[List[Dict[str, str]], Dict[str, str
                 current_channel['name'] = name
                 
         elif not line.startswith('#'):
-            current_channel['url'] = line
+            # 处理可能存在的$后缀
+            url_parts = line.split('$', 1)
+            url = url_parts[0]
+            route_info = url_parts[1] if len(url_parts) > 1 else None
+            current_channel['url'] = url
+            current_channel['route_info'] = route_info
             # 这是频道URL
             if 'name' in current_channel:
                 channels.append(current_channel.copy())

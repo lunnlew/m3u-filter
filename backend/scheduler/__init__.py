@@ -5,7 +5,7 @@ from typing import Optional
 import asyncio
 from sync import sync_epg_source, sync_stream_source
 from database import get_db_connection
-from routers.stream_tracks import test_stream_track
+from routers.stream_tracks import test_all_tracks
 from routers.filter_rule_sets import generate_m3u_file, generate_txt_file
 
 import logging
@@ -21,23 +21,10 @@ except RuntimeError:
 # 创建调度器时指定事件循环
 scheduler = AsyncIOScheduler(event_loop=loop)
 
-async def test_all_stream_tracks():
-    """测试所有直播源的连通性和速度"""
-    with get_db_connection() as conn:
-        c = conn.cursor()
-        c.execute("""
-            SELECT id FROM stream_tracks 
-            WHERE COALESCE(probe_failure_count, 0) < 5
-        """)
-        track_ids = [row[0] for row in c.fetchall()]
-        
-    for track_id in track_ids:
-        await test_stream_track(track_id)
-
 def schedule_test_stream_tracks():
     """调度直播源测试任务"""
     scheduler.add_job(
-        test_all_stream_tracks,
+        test_all_tracks,
         trigger=IntervalTrigger(hours=3),
         id='test_stream_tracks',
         name='Test All Stream Tracks',
