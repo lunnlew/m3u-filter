@@ -66,7 +66,7 @@ export const FilterRuleSetList = () => {
     const handleTestRuleSet = async (id: number) => {
         try {
             const result = await testRuleSetMutation.mutateAsync(id);
-            message.success(`测试任务已创建，任务ID: ${result.data.task_id}`);
+            message.success(`测试任务已创建`);
         } catch (error) {
             message.error('创建测试任务失败');
         }
