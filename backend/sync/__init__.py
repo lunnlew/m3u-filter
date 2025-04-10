@@ -361,16 +361,16 @@ async def sync_stream_source(source_id: int):
                         "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                         (
                             source_id,
-                            channel.get('name'),
-                            channel.get('url'),
-                            channel.get('group-title'),
-                            channel.get('tvg-id'),
-                            channel.get('tvg-name'),
-                            channel.get('tvg-logo'),
-                            channel.get('tvg-language'),
-                            channel.get('route_info'),
-                            tvg_channel.get('catchup'),
-                            tvg_channel.get('catchup_source')
+                            channel.get('name', ''),
+                            channel.get('url', ''),
+                            channel.get('group-title', ''),
+                            channel.get('tvg-id', ''),
+                            channel.get('tvg-name', ''),
+                            channel.get('tvg-logo', ''),
+                            channel.get('tvg-language', ''),
+                            channel.get('route_info', ''),
+                            tvg_channel.get('catchup', ''),
+                            tvg_channel.get('catchup_source', '')
                         )
                     )
 

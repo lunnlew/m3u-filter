@@ -78,10 +78,13 @@ class M3UGenerator:
         """将频道按分组归类"""
         grouped = {}
         for channel in channels:
-            group = channel.get('group_title') or '未分类'
+            # 修改默认分组名称，避免出现 Undefined
+            group = channel.get('group_title', '') or '未分类'
             if group not in grouped:
                 grouped[group] = []
             grouped[group].append(channel)
+            # 确保 channel 中的 group_title 与分组一致
+            channel['group_title'] = group
         return grouped
 
     def _sort_and_group_channels(self, channels: List[Dict], sort_by: str = 'display_name', 
