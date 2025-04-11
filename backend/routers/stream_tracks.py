@@ -323,7 +323,13 @@ async def test_stream_track(track_id: int):
                 'speed': speed,
                 'stream_info': stream_info
             })
-            
+            # 测试完成后更新状态
+            await update_stream_status(
+                track_id=track_id,
+                url=url,
+                success=status,  # 测试结果：True 表示成功，False 表示失败
+                test_time=datetime.now()
+            )
             # 检查是否需要执行批量更新
             current_time = time.time()
             if (len(track_result_queue) >= TRACK_RESULT_BATCH_SIZE or 
@@ -332,6 +338,13 @@ async def test_stream_track(track_id: int):
                 
     except Exception as e:
         logger.error(f"测试频道失败: track_id={track_id}, 错误信息: {str(e)}", exc_info=True)
+        # 测试失败时更新状态
+        await update_stream_status(
+            track_id=track_id,
+            url=url,
+            success=False,
+            test_time=datetime.now()
+        )
         raise
 
 router = APIRouter()
@@ -503,7 +516,15 @@ async def process_batch_tasks(task_id: int, track_ids: List[int]):
                 
                 # 更新测试结果
                 update_track_result(track_id, status, latency, stream_info)
-                
+
+                # 更新每个流的状态
+                await update_stream_status(
+                    track_id=track_id,
+                    url=url,
+                    success=status == True,
+                    test_time=datetime.now()
+                )
+
                 return {
                     'track_id': track_id,
                     'status': status,
@@ -514,6 +535,12 @@ async def process_batch_tasks(task_id: int, track_ids: List[int]):
             except Exception as e:
                 error_msg = str(e)
                 logger.error(f"处理频道 {track_id} 时出错: {error_msg}")
+                await update_stream_status(
+                    track_id=track_id,
+                    url=url,
+                    success=False,
+                    test_time=datetime.now()
+                )
                 return {
                     'track_id': track_id,
                     'status': False,
@@ -1163,3 +1190,165 @@ async def probe_rtmp_stream(url: str) -> dict:
         await cleanup_ffmpeg_processes()
         
     return {}
+
+async def update_stream_status(track_id: int, url: str, success: bool, test_time: datetime = None):
+    """更新流媒体状态"""
+    if not test_time:
+        test_time = datetime.now()
+    
+    try:
+        with get_db_connection() as conn:
+            c = conn.cursor()
+            if success:
+                # 更新成功状态
+                c.execute("""
+                    UPDATE stream_tracks 
+                    SET test_status = 1,
+                        probe_failure_count = 0,
+                        last_test_time = ?,
+                        last_success_time = ?
+                    WHERE id = ?
+                """, (test_time.isoformat(), test_time.isoformat(), track_id))
+                
+                # 更新invalid_urls表
+                c.execute("""
+                    UPDATE invalid_urls 
+                    SET last_success_time = ?,
+                        failure_count = 0
+                    WHERE url = ?
+                """, (test_time.isoformat(), url))
+            else:
+                # 更新失败状态
+                c.execute("""
+                    UPDATE stream_tracks 
+                    SET test_status = 0,
+                        probe_failure_count = COALESCE(probe_failure_count, 0) + 1,
+                        last_test_time = ?,
+                        last_failure_time = ?
+                    WHERE id = ?
+                """, (test_time.isoformat(), test_time.isoformat(), track_id))
+                
+                # 更新或插入invalid_urls记录
+                c.execute("""
+                    INSERT INTO invalid_urls (url, first_failure_time, last_failure_time, failure_count)
+                    VALUES (?, ?, ?, 1)
+                    ON CONFLICT(url) DO UPDATE SET
+                        last_failure_time = excluded.last_failure_time,
+                        failure_count = failure_count + 1
+                """, (url, test_time.isoformat(), test_time.isoformat()))
+            
+            conn.commit()
+            
+    except Exception as e:
+        logger.error(f"更新流媒体状态失败: {str(e)}")
+        raise
+
+async def cleanup_invalid_tracks():
+    """清理无效的频道"""
+    try:
+        with get_db_connection() as conn:
+            c = conn.cursor()
+            # 删除满足清理条件的频道
+            c.execute("""
+                DELETE FROM stream_tracks WHERE
+                    -- 连续失败次数过多
+                    probe_failure_count >= 5 OR
+                    -- 最近一个月测试都失败
+                    (test_status = 0 AND 
+                     julianday('now') - julianday(last_test_time) <= 30 AND
+                     (last_success_time IS NULL OR 
+                      julianday('now') - julianday(last_success_time) > 30)) OR
+                    -- 从未测试成功且添加超过7天
+                    (test_status = 0 AND last_success_time IS NULL AND 
+                     julianday('now') - julianday(created_at) > 7)
+            """)
+            
+            cleaned_count = c.rowcount
+            conn.commit()
+            logger.info(f"清理了 {cleaned_count} 个无效频道")
+            
+    except Exception as e:
+        logger.error(f"清理无效频道失败: {str(e)}")
+        raise
+
+async def maintain_invalid_urls():
+    """维护失效URL数据库，更新状态并清理过期记录"""
+    logger.info("[维护失效URL] 开始维护任务")
+    try:
+        with get_db_connection() as conn:
+            c = conn.cursor()
+            
+            # 更新失效URL的统计信息
+            c.execute("""
+                INSERT OR REPLACE INTO invalid_urls (
+                    url, first_failure_time, last_failure_time, 
+                    failure_count, source_ids, last_success_time
+                )
+                SELECT 
+                    url,
+                    MIN(created_at) as first_failure_time,
+                    MAX(last_failure_time) as last_failure_time,
+                    MAX(probe_failure_count) as failure_count,
+                    GROUP_CONCAT(DISTINCT source_id) as source_ids,
+                    MAX(last_success_time) as last_success_time
+                FROM stream_tracks
+                WHERE probe_failure_count > 0
+                GROUP BY url
+            """)
+            
+            # 清理恢复的URL（最近7天有成功记录）
+            c.execute("""
+                DELETE FROM invalid_urls
+                WHERE last_success_time IS NOT NULL
+                AND julianday('now') - julianday(last_success_time) <= 7
+            """)
+            
+            # 清理长期未更新的记录（超过60天）
+            c.execute("""
+                DELETE FROM invalid_urls
+                WHERE julianday('now') - julianday(last_failure_time) > 60
+                AND (last_success_time IS NULL OR 
+                     julianday('now') - julianday(last_success_time) > 60)
+            """)
+            
+            conn.commit()
+            logger.info("[维护失效URL] 维护任务完成")
+            
+    except Exception as e:
+        logger.error(f"[维护失效URL] 维护任务失败: {str(e)}")
+        raise
+
+@router.get("/stream-tracks/statistics")
+async def get_stream_statistics():
+    """获取流媒体测试统计信息"""
+    with get_db_connection() as conn:
+        c = conn.cursor()
+        try:
+            # 获取总体统计
+            c.execute("""
+                SELECT 
+                    COUNT(*) as total_tracks,
+                    SUM(CASE WHEN test_status = 1 THEN 1 ELSE 0 END) as working_tracks,
+                    SUM(CASE WHEN test_status = 0 THEN 1 ELSE 0 END) as failed_tracks,
+                    SUM(CASE WHEN probe_failure_count >= 5 THEN 1 ELSE 0 END) as critical_tracks
+                FROM stream_tracks
+            """)
+            stats = dict(zip(['total', 'working', 'failed', 'critical'], c.fetchone()))
+            
+            # 获取失效URL统计
+            c.execute("""
+                SELECT 
+                    COUNT(*) as total_invalid,
+                    AVG(failure_count) as avg_failures,
+                    SUM(CASE WHEN last_success_time IS NOT NULL THEN 1 ELSE 0 END) as recovered
+                FROM invalid_urls
+            """)
+            invalid_stats = dict(zip(['total', 'avg_failures', 'recovered'], c.fetchone()))
+            
+            return BaseResponse.success(data={
+                'tracks': stats,
+                'invalid_urls': invalid_stats
+            })
+        except Exception as e:
+            logger.error(f"获取统计信息失败: {str(e)}")
+            return BaseResponse.error(message="获取统计信息失败")

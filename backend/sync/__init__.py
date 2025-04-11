@@ -297,6 +297,22 @@ async def sync_stream_source(source_id: int):
         print(f"[同步直播源] 获取到源信息: {source['name']} ({source['url']})")
     
     try:
+        # 在获取新内容之前，获取失效URL列表
+        with get_db_connection() as conn:
+            c = conn.cursor()
+            c.execute("""
+                SELECT url FROM invalid_urls 
+                WHERE (
+                    failure_count >= 5 OR
+                    (julianday('now') - julianday(last_failure_time)) <= 30
+                ) AND (
+                    last_success_time IS NULL OR
+                    (julianday('now') - julianday(last_success_time)) > 7
+                )
+            """)
+            invalid_urls = {row[0] for row in c.fetchall()}
+            print(f"[同步直播源] 已加载 {len(invalid_urls)} 个已知失效URL")
+        
         # 获取代理设置
         proxies = get_proxy_settings()
         if proxies:

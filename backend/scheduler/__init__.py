@@ -5,7 +5,7 @@ from typing import Optional
 import asyncio
 from sync import sync_epg_source, sync_stream_source
 from database import get_db_connection
-from routers.stream_tracks import test_all_tracks
+from routers.stream_tracks import test_all_tracks, cleanup_invalid_tracks
 from routers.filter_rule_sets import generate_m3u_file, generate_txt_file
 
 import logging
@@ -112,6 +112,26 @@ def init_scheduler():
     schedule_sync_stream_sources()
     schedule_generate_m3u_files()
     schedule_generate_txt_files()
+    
+    # 添加清理任务
+    scheduler.add_job(
+        cleanup_invalid_tracks,
+        trigger=IntervalTrigger(hours=12),  # 每12小时执行一次
+        id='cleanup_invalid_tracks',
+        name='Cleanup Invalid Tracks',
+        replace_existing=True,
+        misfire_grace_time=3600  # 允许1小时的任务延迟
+    )
+    
+    # 添加URL状态维护任务
+    scheduler.add_job(
+        maintain_invalid_urls,
+        trigger=IntervalTrigger(hours=6),  # 每6小时执行一次
+        id='maintain_invalid_urls',
+        name='Maintain Invalid URLs',
+        replace_existing=True,
+        misfire_grace_time=3600
+    )
 
 def start_scheduler():
     """启动调度器"""
