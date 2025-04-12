@@ -9,6 +9,4 @@ CREATE TABLE IF NOT EXISTS invalid_urls (
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
--- 在stream_tracks表中添加新字段
-ALTER TABLE stream_tracks ADD COLUMN created_at DATETIME DEFAULT CURRENT_TIMESTAMP;
 ALTER TABLE stream_tracks ADD COLUMN last_success_time DATETIME;
