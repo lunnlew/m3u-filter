@@ -5,7 +5,7 @@ from typing import Optional
 import asyncio
 from sync import sync_epg_source, sync_stream_source
 from database import get_db_connection
-from routers.stream_tracks import test_all_tracks, cleanup_invalid_tracks
+from routers.stream_tracks import test_all_tracks, cleanup_invalid_tracks, maintain_invalid_urls
 from routers.filter_rule_sets import generate_m3u_file, generate_txt_file
 
 import logging
