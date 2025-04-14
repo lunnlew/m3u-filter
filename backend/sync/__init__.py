@@ -105,10 +105,10 @@ async def sync_epg_source(source_id: int):
         print("[同步EPG] 开始解析XML数据...")
         root = ET.fromstring(content)
         
-        # 清除该源的旧数据
-        print("[同步EPG] 清除旧数据...")
-        c.execute("DELETE FROM epg_channels WHERE source_id = ?", (source_id,))
-        c.execute("DELETE FROM epg_programs WHERE source_id = ?", (source_id,))
+        # 获取现有频道和节目数据
+        print("[同步EPG] 获取现有数据...")
+        c.execute("SELECT channel_id FROM epg_channels WHERE source_id = ?", (source_id,))
+        existing_channel_ids = {row[0] for row in c.fetchall()}
         
         # 解析并收集频道信息
         print("[同步EPG] 开始解析频道信息...")
@@ -145,10 +145,20 @@ async def sync_epg_source(source_id: int):
         if channels_data:
             print("[同步EPG] 开始插入频道数据...")
             c.executemany(
-                "INSERT OR IGNORE INTO epg_channels (channel_id, display_name, language, category, logo_url, source_id, local_logo_path) "
+                "INSERT OR REPLACE INTO epg_channels (channel_id, display_name, language, category, logo_url, source_id, local_logo_path) "
                 "VALUES (?, ?, ?, ?, ?, ?, ?)",
                 channels_data
             )
+            
+            # 删除不再存在的频道
+            new_channel_ids = {channel[0] for channel in channels_data}
+            channels_to_delete = existing_channel_ids - new_channel_ids
+            if channels_to_delete:
+                print(f"[同步EPG] 删除 {len(channels_to_delete)} 个不再存在的频道...")
+                c.executemany(
+                    "DELETE FROM epg_channels WHERE source_id = ? AND channel_id = ?",
+                    [(source_id, channel_id) for channel_id in channels_to_delete]
+                )
         
         # 解析并收集节目信息
         print("[同步EPG] 开始解析节目信息...")
@@ -174,14 +184,30 @@ async def sync_epg_source(source_id: int):
         
         print(f"[同步EPG] 解析到 {program_count} 个节目")
         
-        # 批量插入节目数据
+        # 获取现有节目数据
+        print("[同步EPG] 获取现有节目数据...")
+        c.execute("SELECT channel_id, start_time FROM epg_programs WHERE source_id = ?", (source_id,))
+        existing_programs = {(row[0], row[1]) for row in c.fetchall()}
+        
+        # 更新或插入节目数据
         if programs_data:
-            print("[同步EPG] 开始插入节目数据...")
+            print("[同步EPG] 开始更新节目数据...")
             c.executemany(
-                "INSERT OR IGNORE INTO epg_programs (channel_id, title, start_time, end_time, description, language, category, source_id) "
+                "INSERT OR REPLACE INTO epg_programs (channel_id, title, start_time, end_time, description, language, category, source_id) "
                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                 programs_data
             )
+            
+            # 删除不再存在的节目
+            new_programs = {(prog[0], prog[2]) for prog in programs_data}  # channel_id, start_time
+            programs_to_delete = existing_programs - new_programs
+            if programs_to_delete:
+                print(f"[同步EPG] 删除 {len(programs_to_delete)} 个不再存在的节目...")
+                for channel_id, start_time in programs_to_delete:
+                    c.execute(
+                        "DELETE FROM epg_programs WHERE source_id = ? AND channel_id = ? AND start_time = ?",
+                        (source_id, channel_id, start_time)
+                    )
         
         # 更新同步时间
         print("[同步EPG] 更新同步时间...")
@@ -367,13 +393,14 @@ async def sync_stream_source(source_id: int):
             c = conn.cursor()
             try:
                 print("[同步直播源] 开始更新数据库")
-                # 先删除该源的旧数据
-                c.execute("DELETE FROM stream_tracks WHERE source_id = ?", (source_id,))
+                # 获取现有频道数据
+                c.execute("SELECT url FROM stream_tracks WHERE source_id = ?", (source_id,))
+                existing_urls = {row[0] for row in c.fetchall()}
                 
-                # 插入过滤后的频道数据
+                # 更新或插入频道数据
                 for channel in filtered_channels:
                     c.execute(
-                        "INSERT INTO stream_tracks (source_id, name, url, group_title, tvg_id, tvg_name, tvg_logo, tvg_language, route_info, catchup, catchup_source) "
+                        "INSERT OR REPLACE INTO stream_tracks (source_id, name, url, group_title, tvg_id, tvg_name, tvg_logo, tvg_language, route_info, catchup, catchup_source) "
                         "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                         (
                             source_id,
@@ -388,6 +415,16 @@ async def sync_stream_source(source_id: int):
                             tvg_channel.get('catchup', ''),
                             tvg_channel.get('catchup_source', '')
                         )
+                    )
+                
+                # 删除不再存在的频道
+                new_urls = {channel.get('url', '') for channel in filtered_channels}
+                urls_to_delete = existing_urls - new_urls
+                if urls_to_delete:
+                    print(f"[同步直播源] 删除 {len(urls_to_delete)} 个不再存在的频道...")
+                    c.executemany(
+                        "DELETE FROM stream_tracks WHERE source_id = ? AND url = ?",
+                        [(source_id, url) for url in urls_to_delete]
                     )
 
                 # 更新同步时间
