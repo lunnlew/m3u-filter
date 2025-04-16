@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { fetchStreamSources, createOrUpdateStreamSource, deleteStreamSource, syncStreamSource } from '../api/streamSources';
+import { fetchStreamSources, createOrUpdateStreamSource, deleteStreamSource, syncStreamSource, syncAllStreamSources } from '../api/streamSources';
 import type { StreamSource } from '../types/stream';
 
 export const useStreamSources = (params?: { keyword?: string; type?: string; active?: boolean }) => {
@@ -36,6 +36,17 @@ export const useStreamSourceSync = () => {
 
   return useMutation({
     mutationFn: syncStreamSource,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['stream-sources'] });
+    }
+  });
+};
+
+export const useStreamSourceSyncAll = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: syncAllStreamSources,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['stream-sources'] });
     }

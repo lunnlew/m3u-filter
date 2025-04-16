@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { Table, Button, Modal, App, Tooltip, Input, Select, Space, Row, Col } from 'antd';
 import { SearchOutlined, FilterOutlined, ReloadOutlined } from '@ant-design/icons';
 import { StreamSource } from '../types/stream';
-import { useStreamSources, useStreamSourceMutation, useStreamSourceDelete, useStreamSourceSync } from '../hooks/streamSources';
+import { useStreamSources, useStreamSourceMutation, useStreamSourceDelete, useStreamSourceSync, useStreamSourceSyncAll } from '../hooks/streamSources';
 import { StreamSourceForm } from './StreamSourceForm';
 
 export const StreamSourceList: React.FC = () => {
@@ -24,6 +24,7 @@ export const StreamSourceList: React.FC = () => {
   const sourceMutation = useStreamSourceMutation();
   const deleteMutation = useStreamSourceDelete();
   const syncMutation = useStreamSourceSync();
+  const syncAllMutation = useStreamSourceSyncAll();
 
   const handleDelete = async (id: number) => {
     try {
@@ -154,6 +155,20 @@ export const StreamSourceList: React.FC = () => {
           }}
         >
           添加直播源
+        </Button>
+        <Button
+          type="primary"
+          onClick={async () => {
+            try {
+              const result = await syncAllMutation.mutateAsync();
+              message.success(result.message || '已启动全部同步');
+            } catch (err) {
+              message.error(err instanceof Error ? err.message : '启动全部同步时发生错误');
+            }
+          }}
+          loading={syncAllMutation.isPending}
+        >
+          全部同步
         </Button>
         <Input
           placeholder="搜索名称"

@@ -35,3 +35,11 @@ export const syncStreamSource = async (id: number): Promise<ApiResponse> => {
   });
   return response.data;
 };
+
+export const syncAllStreamSources = async (): Promise<ApiResponse> => {
+  const response = await request<ApiResponse>({
+    method: 'post',
+    url: '/stream-sources/sync-all'
+  });
+  return response.data;
+};

@@ -95,3 +95,20 @@ async def sync_single_stream_source(source_id: int):
         return BaseResponse.success(message="同步任务已启动")
     except Exception as e:
         return BaseResponse.error(message=f"启动同步任务时发生错误: {str(e)}", code=500)
+
+@router.post("/stream-sources/sync-all")
+async def sync_all_stream_sources():
+    try:
+        with get_db_connection() as conn:
+            c = conn.cursor()
+            c.execute("SELECT id FROM stream_sources WHERE active = 1")
+            source_ids = [row[0] for row in c.fetchall()]
+
+        # 异步执行所有同步任务
+        import asyncio
+        for source_id in source_ids:
+            asyncio.create_task(sync_stream_source(source_id))
+        
+        return BaseResponse.success(message=f"已启动{len(source_ids)}个同步任务")
+    except Exception as e:
+        return BaseResponse.error(message=f"启动同步任务时发生错误: {str(e)}", code=500)
