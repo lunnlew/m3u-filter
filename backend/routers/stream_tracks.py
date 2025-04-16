@@ -147,7 +147,7 @@ async def test_all_tracks():
 
 async def process_batch_tasks(task_id: int, track_ids: List[int]):
     """处理批量测试任务"""
-    BATCH_SIZE = 10
+    BATCH_SIZE = 50
     MAX_CONCURRENT = 10
     semaphore = asyncio.Semaphore(MAX_CONCURRENT)
     
