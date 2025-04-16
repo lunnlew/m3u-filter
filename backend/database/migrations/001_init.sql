@@ -1,17 +1,35 @@
 --
--- File generated with SQLiteStudio v3.4.4 on 周二 3月 11 14:02:21 2025
+-- File generated with SQLiteStudio v3.4.4 on 周三 4月 16 22:24:16 2025
 --
--- Text encoding used: UTF-8
+-- Text encoding used: System
 --
 PRAGMA foreign_keys = off;
 BEGIN TRANSACTION;
+
+-- Table: blocked_domains
+CREATE TABLE IF NOT EXISTS blocked_domains (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    domain            TEXT    UNIQUE
+                              NOT NULL,
+    failure_count     INTEGER DEFAULT 0,
+    last_failure_time TEXT,
+    created_at        TEXT    DEFAULT CURRENT_TIMESTAMP,
+    updated_at        TEXT    DEFAULT CURRENT_TIMESTAMP,
+    last_errors       TEXT
+);
+
+
+-- Index: sqlite_autoindex_blocked_domains_1
+CREATE UNIQUE INDEX IF NOT EXISTS sqlite_autoindex_blocked_domains_1 ON blocked_domains (
+    domain COLLATE BINARY
+);
+
 
 -- Table: db_version
 CREATE TABLE IF NOT EXISTS db_version (
     version    INTEGER PRIMARY KEY,
     applied_at TEXT    NOT NULL
 );
-
 
 -- Table: default_channel_logos
 CREATE TABLE IF NOT EXISTS default_channel_logos (
@@ -22,6 +40,12 @@ CREATE TABLE IF NOT EXISTS default_channel_logos (
     UNIQUE (
         channel_name
     )
+);
+
+
+-- Index: sqlite_autoindex_default_channel_logos_1
+CREATE UNIQUE INDEX IF NOT EXISTS sqlite_autoindex_default_channel_logos_1 ON default_channel_logos (
+    channel_name COLLATE BINARY
 );
 
 
@@ -45,6 +69,33 @@ CREATE TABLE IF NOT EXISTS epg_channels (
         source_id
     )
 );
+
+
+-- Index: idx_channel_id
+CREATE INDEX IF NOT EXISTS idx_channel_id ON epg_channels (
+    channel_id
+);
+
+
+-- Index: idx_epg_channels_name
+CREATE INDEX IF NOT EXISTS idx_epg_channels_name ON epg_channels (
+    display_name
+);
+
+
+-- Index: idx_source_id
+CREATE INDEX IF NOT EXISTS idx_source_id ON epg_channels (
+    source_id
+);
+
+
+-- Index: sqlite_autoindex_epg_channels_1
+CREATE UNIQUE INDEX IF NOT EXISTS sqlite_autoindex_epg_channels_1 ON epg_channels (
+    display_name COLLATE BINARY,
+    channel_id COLLATE BINARY,
+    source_id COLLATE BINARY
+);
+
 
 
 -- Table: epg_programs
@@ -76,6 +127,42 @@ CREATE TABLE IF NOT EXISTS epg_programs (
     )
 );
 
+
+-- Index: idx_epg_programs_channel
+CREATE INDEX IF NOT EXISTS idx_epg_programs_channel ON epg_programs (
+    channel_id,
+    source_id
+);
+
+
+-- Index: idx_epg_programs_time
+CREATE INDEX IF NOT EXISTS idx_epg_programs_time ON epg_programs (
+    start_time,
+    end_time
+);
+
+
+-- Index: idx_program_channel
+CREATE INDEX IF NOT EXISTS idx_program_channel ON epg_programs (
+    channel_id
+);
+
+
+-- Index: idx_program_source
+CREATE INDEX IF NOT EXISTS idx_program_source ON epg_programs (
+    source_id
+);
+
+
+-- Index: sqlite_autoindex_epg_programs_1
+CREATE UNIQUE INDEX IF NOT EXISTS sqlite_autoindex_epg_programs_1 ON epg_programs (
+    title COLLATE BINARY,
+    start_time COLLATE BINARY,
+    channel_id COLLATE BINARY,
+    source_id COLLATE BINARY
+);
+
+
 -- Table: epg_sources
 CREATE TABLE IF NOT EXISTS epg_sources (
     id               INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -91,100 +178,60 @@ CREATE TABLE IF NOT EXISTS epg_sources (
                              DEFAULT 'en'
 );
 
-INSERT INTO epg_sources (
-                            id,
-                            name,
-                            url,
-                            last_update,
-                            active,
-                            sync_interval,
-                            default_language
-                        )
-                        VALUES (
-                            1,
-                            '节目总表',
-                            'http://epg.51zmt.top:8000/e.xml',
-                            '2025-03-11T14:00:46.456765',
-                            1,
-                            6,
-                            'en'
-                        );
 
-INSERT INTO epg_sources (
-                            id,
-                            name,
-                            url,
-                            last_update,
-                            active,
-                            sync_interval,
-                            default_language
-                        )
-                        VALUES (
-                            2,
-                            '央视及各省卫视',
-                            'http://epg.51zmt.top:8000/cc.xml',
-                            '2025-03-11T14:00:47.017079',
-                            1,
-                            6,
-                            'en'
-                        );
+-- Index: sqlite_autoindex_epg_sources_1
+CREATE UNIQUE INDEX IF NOT EXISTS sqlite_autoindex_epg_sources_1 ON epg_sources (
+    url COLLATE BINARY
+);
 
-INSERT INTO epg_sources (
-                            id,
-                            name,
-                            url,
-                            last_update,
-                            active,
-                            sync_interval,
-                            default_language
-                        )
-                        VALUES (
-                            3,
-                            '地方及数字付费',
-                            'http://epg.51zmt.top:8000/difang.xml',
-                            '2025-03-11T14:00:50.105076',
-                            1,
-                            6,
-                            'en'
-                        );
 
-INSERT INTO epg_sources (
-                            id,
-                            name,
-                            url,
-                            last_update,
-                            active,
-                            sync_interval,
-                            default_language
-                        )
-                        VALUES (
-                            4,
-                            'epg.112114.xyz',
-                            'https://epg.112114.xyz/pp.xml',
-                            '2025-03-11T14:00:54.146018',
-                            1,
-                            6,
-                            'en'
-                        );
+-- Table: filter_rule_set_children
+CREATE TABLE IF NOT EXISTS filter_rule_set_children (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    parent_set_id INTEGER NOT NULL,
+    child_set_id  INTEGER NOT NULL,
+    FOREIGN KEY (
+        parent_set_id
+    )
+    REFERENCES filter_rule_sets (id) ON DELETE CASCADE,
+    FOREIGN KEY (
+        child_set_id
+    )
+    REFERENCES filter_rule_sets (id) ON DELETE CASCADE
+);
 
-INSERT INTO epg_sources (
-                            id,
-                            name,
-                            url,
-                            last_update,
-                            active,
-                            sync_interval,
-                            default_language
-                        )
-                        VALUES (
-                            6,
-                            '来自直播订阅识别',
-                            'https://epg.iill.top/epg',
-                            '2025-03-11T11:58:06.614623',
-                            1,
-                            6,
-                            'zh'
-                        );
+
+-- Table: filter_rule_set_mappings
+CREATE TABLE IF NOT EXISTS filter_rule_set_mappings (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    rule_set_id INTEGER NOT NULL,
+    rule_id     INTEGER NOT NULL,
+    FOREIGN KEY (
+        rule_set_id
+    )
+    REFERENCES filter_rule_sets (id),
+    FOREIGN KEY (
+        rule_id
+    )
+    REFERENCES filter_rules (id) 
+);
+
+
+-- Table: filter_rule_sets
+CREATE TABLE IF NOT EXISTS filter_rule_sets (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    name          TEXT    NOT NULL,
+    description   TEXT,
+    enabled       BOOLEAN DEFAULT TRUE,
+    logic_type    TEXT    DEFAULT [AND],
+    sync_interval INTEGER DEFAULT (6) 
+);
+
+
+-- Index: idx_filter_rule_sets_name
+CREATE INDEX IF NOT EXISTS idx_filter_rule_sets_name ON filter_rule_sets (
+    name
+);
 
 
 -- Table: filter_rules
@@ -216,6 +263,98 @@ CREATE TABLE IF NOT EXISTS filter_rules (
 );
 
 
+-- Index: idx_filter_rules_enabled
+CREATE INDEX IF NOT EXISTS idx_filter_rules_enabled ON filter_rules (
+    enabled
+);
+
+
+-- Index: idx_filter_rules_name
+CREATE INDEX IF NOT EXISTS idx_filter_rules_name ON filter_rules (
+    name
+);
+
+
+-- Index: idx_filter_rules_priority
+CREATE INDEX IF NOT EXISTS idx_filter_rules_priority ON filter_rules (
+    priority
+);
+
+
+-- Table: group_mapping_template_items
+CREATE TABLE IF NOT EXISTS group_mapping_template_items (
+    template_id  INTEGER NOT NULL,
+    channel_name TEXT    NOT NULL,
+    custom_group TEXT    NOT NULL,
+    PRIMARY KEY (
+        template_id,
+        channel_name
+    ),
+    FOREIGN KEY (
+        template_id
+    )
+    REFERENCES group_mapping_templates (id) ON DELETE CASCADE
+);
+
+
+-- Index: sqlite_autoindex_group_mapping_template_items_1
+CREATE UNIQUE INDEX IF NOT EXISTS sqlite_autoindex_group_mapping_template_items_1 ON group_mapping_template_items (
+    template_id COLLATE BINARY,
+    channel_name COLLATE BINARY
+);
+
+
+-- Table: group_mapping_templates
+CREATE TABLE IF NOT EXISTS group_mapping_templates (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    name        TEXT    NOT NULL,
+    description TEXT,
+    rule_set_id NUMERIC
+);
+
+
+-- Table: group_mappings
+CREATE TABLE IF NOT EXISTS group_mappings (
+    channel_name TEXT    NOT NULL,
+    custom_group TEXT    NOT NULL,
+    rule_set_id  INTEGER,
+    PRIMARY KEY (
+        channel_name,
+        rule_set_id
+    ),
+    FOREIGN KEY (
+        rule_set_id
+    )
+    REFERENCES filter_rule_sets (id) ON DELETE CASCADE
+);
+
+
+-- Index: sqlite_autoindex_group_mappings_1
+CREATE UNIQUE INDEX IF NOT EXISTS sqlite_autoindex_group_mappings_1 ON group_mappings (
+    channel_name COLLATE BINARY,
+    rule_set_id COLLATE BINARY
+);
+
+
+-- Table: invalid_urls
+CREATE TABLE IF NOT EXISTS invalid_urls (
+    url                TEXT     PRIMARY KEY,
+    first_failure_time DATETIME,
+    last_failure_time  DATETIME,
+    failure_count      INTEGER  DEFAULT 1,
+    source_ids         TEXT,
+    last_success_time  DATETIME,
+    created_at         DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+
+-- Index: sqlite_autoindex_invalid_urls_1
+CREATE UNIQUE INDEX IF NOT EXISTS sqlite_autoindex_invalid_urls_1 ON invalid_urls (
+    url COLLATE BINARY
+);
+
+
+
 -- Table: proxy_config
 CREATE TABLE IF NOT EXISTS proxy_config (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -226,6 +365,41 @@ CREATE TABLE IF NOT EXISTS proxy_config (
     username   TEXT,
     password   TEXT
 );
+
+
+-- Table: rule_test_tasks
+CREATE TABLE IF NOT EXISTS rule_test_tasks (
+    task_id         INTEGER   PRIMARY KEY,
+    rule_set_id     INTEGER   NOT NULL,
+    status          TEXT      NOT NULL
+                              DEFAULT 'pending',
+    total_items     INTEGER   NOT NULL
+                              DEFAULT 0,
+    processed_items INTEGER   NOT NULL
+                              DEFAULT 0,
+    created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    completed_at    TIMESTAMP,
+    FOREIGN KEY (
+        task_id
+    )
+    REFERENCES stream_tasks (id),
+    FOREIGN KEY (
+        rule_set_id
+    )
+    REFERENCES filter_rule_sets (id) 
+);
+
+
+-- Table: sort_templates
+CREATE TABLE IF NOT EXISTS sort_templates (
+    id           INTEGER  PRIMARY KEY AUTOINCREMENT,
+    name         TEXT     NOT NULL,
+    description  TEXT,
+    group_orders TEXT     NOT NULL,
+    created_at   DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at   DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
 
 -- Table: stream_sources
 CREATE TABLE IF NOT EXISTS stream_sources (
@@ -244,195 +418,67 @@ CREATE TABLE IF NOT EXISTS stream_sources (
                            DEFAULT 6
 );
 
-INSERT INTO stream_sources (
-                               id,
-                               name,
-                               url,
-                               last_update,
-                               type,
-                               x_tvg_url,
-                               catchup,
-                               catchup_source,
-                               active,
-                               sync_interval
-                           )
-                           VALUES (
-                               1,
-                               'vbskycn',
-                               'https://raw.githubusercontent.com/vbskycn/iptv/master/tv/iptv4.txt',
-                               '2025-03-10 10:22:07',
-                               'txt',
-                               NULL,
-                               NULL,
-                               NULL,
-                               1,
-                               6
-                           );
 
-INSERT INTO stream_sources (
-                               id,
-                               name,
-                               url,
-                               last_update,
-                               type,
-                               x_tvg_url,
-                               catchup,
-                               catchup_source,
-                               active,
-                               sync_interval
-                           )
-                           VALUES (
-                               2,
-                               'YanG-1989-Gather.m3u「精简版」',
-                               'https://raw.githubusercontent.com/YanG-1989/m3u/main/Gather.m3u',
-                               '2025-03-11 02:52:31',
-                               'm3u',
-                               'https://epg.iill.top/epg',
-                               'append',
-                               '?playseek=${(b)yyyyMMddHHmmss}-${(e)yyyyMMddHHmmss}',
-                               1,
-                               6
-                           );
+-- Index: sqlite_autoindex_stream_sources_1
+CREATE UNIQUE INDEX IF NOT EXISTS sqlite_autoindex_stream_sources_1 ON stream_sources (
+    url COLLATE BINARY
+);
 
-INSERT INTO stream_sources (
-                               id,
-                               name,
-                               url,
-                               last_update,
-                               type,
-                               x_tvg_url,
-                               catchup,
-                               catchup_source,
-                               active,
-                               sync_interval
-                           )
-                           VALUES (
-                               3,
-                               'YanG-1989-网络直播',
-                               'https://tv.iill.top/m3u/Live',
-                               '2025-03-10 10:54:26',
-                               'm3u',
-                               NULL,
-                               NULL,
-                               NULL,
-                               1,
-                               6
-                           );
 
-INSERT INTO stream_sources (
-                               id,
-                               name,
-                               url,
-                               last_update,
-                               type,
-                               x_tvg_url,
-                               catchup,
-                               catchup_source,
-                               active,
-                               sync_interval
-                           )
-                           VALUES (
-                               4,
-                               'YanG-1989-Gather.m3u「完整版」',
-                               'https://tv.iill.top/m3u/Gather',
-                               '2025-03-10 10:56:19',
-                               'm3u',
-                               NULL,
-                               NULL,
-                               NULL,
-                               1,
-                               6
-                           );
+-- Table: stream_tasks
+CREATE TABLE IF NOT EXISTS stream_tasks (
+    id              INTEGER  PRIMARY KEY AUTOINCREMENT,
+    task_type       TEXT     NOT NULL,
+    status          TEXT     NOT NULL
+                             CHECK (status IN ('pending', 'running', 'completed', 'failed') ),
+    progress        REAL     DEFAULT 0,
+    total_items     INTEGER,
+    processed_items INTEGER  DEFAULT 0,
+    created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+    result          TEXT
+);
+
 
 
 -- Table: stream_tracks
 CREATE TABLE IF NOT EXISTS stream_tracks (
-    id                INTEGER   PRIMARY KEY AUTOINCREMENT,
-    source_id         INTEGER   NOT NULL,
-    name              TEXT      NOT NULL,
-    url               TEXT      NOT NULL,
-    group_title       TEXT,
-    tvg_id            TEXT,
-    tvg_name          TEXT,
-    tvg_logo          TEXT,
-    tvg_language      TEXT,
-    created_at        TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at        TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    catchup           TEXT,
-    catchup_source    TEXT,
-    last_test_time    TEXT,
-    test_status       NUMERIC,
-    test_latency      REAL,
-    video_codec       TEXT,
-    audio_codec       TEXT,
-    resolution        TEXT,
-    bitrate           NUMERIC,
-    frame_rate        REAL,
-    ping_time         REAL,
-    speed_test_time   DATETIME,
-    download_speed    FLOAT,
-    speed_test_status INTEGER   DEFAULT 0,
-    route_info        TEXT,
+    id                  INTEGER   PRIMARY KEY AUTOINCREMENT,
+    source_id           INTEGER   NOT NULL,
+    name                TEXT      NOT NULL,
+    url                 TEXT      NOT NULL,
+    group_title         TEXT,
+    tvg_id              TEXT,
+    tvg_name            TEXT,
+    tvg_logo            TEXT,
+    tvg_language        TEXT,
+    created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    catchup             TEXT,
+    catchup_source      TEXT,
+    last_test_time      TEXT,
+    test_status         NUMERIC,
+    test_latency        REAL,
+    video_codec         TEXT,
+    audio_codec         TEXT,
+    resolution          TEXT,
+    bitrate             NUMERIC,
+    frame_rate          REAL,
+    ping_time           REAL,
+    speed_test_time     DATETIME,
+    download_speed      FLOAT,
+    speed_test_status   INTEGER   DEFAULT 0,
+    route_info          TEXT,
+    probe_failure_count INTEGER   DEFAULT 0,
+    last_failure_time   TEXT,
+    buffer_health       REAL      DEFAULT 0.0,
+    stability_score     REAL      DEFAULT 0.0,
+    quality_score       REAL      DEFAULT 0.0,
+    last_success_time   DATETIME,
     FOREIGN KEY (
         source_id
     )
     REFERENCES stream_sources (id) ON DELETE CASCADE
-);
-
-
--- Index: idx_channel_id
-CREATE INDEX IF NOT EXISTS idx_channel_id ON epg_channels (
-    channel_id
-);
-
-
--- Index: idx_epg_channels_name
-CREATE INDEX IF NOT EXISTS idx_epg_channels_name ON epg_channels (
-    display_name
-);
-
-
--- Index: idx_epg_programs_channel
-CREATE INDEX IF NOT EXISTS idx_epg_programs_channel ON epg_programs (
-    channel_id,
-    source_id
-);
-
-
--- Index: idx_epg_programs_time
-CREATE INDEX IF NOT EXISTS idx_epg_programs_time ON epg_programs (
-    start_time,
-    end_time
-);
-
-
--- Index: idx_filter_rules_enabled
-CREATE INDEX IF NOT EXISTS idx_filter_rules_enabled ON filter_rules (
-    enabled
-);
-
-
--- Index: idx_filter_rules_priority
-CREATE INDEX IF NOT EXISTS idx_filter_rules_priority ON filter_rules (
-    priority
-);
-
-
--- Index: idx_program_channel
-CREATE INDEX IF NOT EXISTS idx_program_channel ON epg_programs (
-    channel_id
-);
-
-
--- Index: idx_program_source
-CREATE INDEX IF NOT EXISTS idx_program_source ON epg_programs (
-    source_id
-);
-
-
--- Index: idx_source_id
-CREATE INDEX IF NOT EXISTS idx_source_id ON epg_channels (
-    source_id
 );
 
 
@@ -454,72 +500,5 @@ CREATE INDEX IF NOT EXISTS idx_stream_track_source_id ON stream_tracks (
 );
 
 
--- 创建filter_rules表
-CREATE TABLE IF NOT EXISTS filter_rules (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL,
-    type TEXT NOT NULL,
-    pattern TEXT NOT NULL,
-    action TEXT NOT NULL,
-    priority INTEGER DEFAULT 0,
-    enabled BOOLEAN DEFAULT TRUE,
-    case_sensitive BOOLEAN DEFAULT FALSE,
-    regex_mode BOOLEAN DEFAULT FALSE
-);
-
--- 创建filter_rule_sets表
-CREATE TABLE IF NOT EXISTS filter_rule_sets (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL,
-    description TEXT,
-    enabled BOOLEAN DEFAULT TRUE,
-    sync_interval INTEGER NOT NULL DEFAULT 6,
-    logic_type TEXT NOT NULL DEFAULT 'AND' CHECK(logic_type IN ('AND', 'OR'))
-);
-
-CREATE TABLE IF NOT EXISTS filter_rule_set_children (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    parent_set_id INTEGER NOT NULL,
-    child_set_id INTEGER NOT NULL,
-    FOREIGN KEY (parent_set_id) REFERENCES filter_rule_sets(id) ON DELETE CASCADE,
-    FOREIGN KEY (child_set_id) REFERENCES filter_rule_sets(id) ON DELETE CASCADE
-);
-
--- 创建filter_rule_set_mappings表
-CREATE TABLE IF NOT EXISTS filter_rule_set_mappings (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    rule_set_id INTEGER NOT NULL,
-    rule_id INTEGER NOT NULL,
-    FOREIGN KEY (rule_set_id) REFERENCES filter_rule_sets(id),
-    FOREIGN KEY (rule_id) REFERENCES filter_rules(id)
-);
-
--- 创建索引
-CREATE INDEX IF NOT EXISTS idx_filter_rules_name ON filter_rules(name);
-CREATE INDEX IF NOT EXISTS idx_filter_rule_sets_name ON filter_rule_sets(name);
-
-
-CREATE TABLE IF NOT EXISTS stream_tasks (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    task_type TEXT NOT NULL,
-    status TEXT NOT NULL CHECK(status IN ('pending', 'running', 'completed', 'failed')),
-    progress REAL DEFAULT 0,
-    total_items INTEGER,
-    processed_items INTEGER DEFAULT 0,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    result TEXT
-);
-
--- 创建排序模板表
-CREATE TABLE IF NOT EXISTS sort_templates (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL,
-    description TEXT,
-    group_orders TEXT NOT NULL,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-);
-
--- 创建排序模板表索引
-CREATE INDEX IF NOT EXISTS idx_sort_templates_name ON sort_templates(name);
+COMMIT TRANSACTION;
+PRAGMA foreign_keys = on;
