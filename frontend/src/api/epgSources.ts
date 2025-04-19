@@ -33,5 +33,5 @@ export const syncEPGSource = async (id: number): Promise<void> => {
     method: 'post',
     url: `/epg-sources/${id}/sync`
   });
-  return response.data.data;
+  return response.data;
 };
