@@ -25,11 +25,13 @@ export const GroupMappingTemplateForm: React.FC<GroupMappingTemplateFormProps> =
         mappings: initialValues.mappings instanceof Array
           ? initialValues.mappings.map(item => ({
             channel: item.channel_name,
-            group: item.custom_group
+            group: item.custom_group,
+            display_name: item.display_name
           }))
           : Object.entries(initialValues.mappings || {}).map(([channel, group]) => ({
             channel,
-            group
+            group,
+            display_name: ''
           }))
       };
       form.setFieldsValue(formValues);
@@ -41,9 +43,10 @@ export const GroupMappingTemplateForm: React.FC<GroupMappingTemplateFormProps> =
 
   const handleSubmit = (values: any) => {
     try {
-      const mappings = (values.mappings || []).map((item: { channel: string; group: string }) => ({
+      const mappings = (values.mappings || []).map((item: { channel: string; group: string; display_name?: string }) => ({
         channel_name: item.channel,
-        custom_group: item.group
+        custom_group: item.group,
+        display_name: item.display_name
       }));
 
       onSubmit({
@@ -94,6 +97,13 @@ export const GroupMappingTemplateForm: React.FC<GroupMappingTemplateFormProps> =
                   className="group-mapping-input"
                 >
                   <Input placeholder="自定义分组名称" />
+                </Form.Item>
+                <Form.Item
+                  {...restField}
+                  name={[name, 'display_name']}
+                  className="group-mapping-input"
+                >
+                  <Input placeholder="自定义显示名称（可选）" />
                 </Form.Item>
                 <Button danger onClick={() => remove(name)}>删除</Button>
               </div>

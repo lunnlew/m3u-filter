@@ -37,9 +37,10 @@ export const GroupMappingForm: React.FC<GroupMappingFormProps> = ({ ruleSetId, o
 
   useEffect(() => {
     if (mappings) {
-      const initialValues = Object.entries(mappings).map(([channel, group]) => ({
+      const initialValues = Object.entries(mappings).map(([channel, mapping]) => ({
         channel,
-        group
+        group: mapping.custom_group,
+        display_name: mapping.display_name
       }));
       form.setFieldsValue({ mappings: initialValues });
     } else {
@@ -47,13 +48,14 @@ export const GroupMappingForm: React.FC<GroupMappingFormProps> = ({ ruleSetId, o
     }
   }, [form, mappings]);
 
-  const handleSubmit = (values: { mappings: Array<{ channel: string; group: string }> }) => {
-    const updatePayload = values.mappings.map(({ channel, group }) => ({
+  const handleSubmit = (values: { mappings: Array<{ channel: string; group: string; display_name?: string }> }) => {
+    const updatePayload = values.mappings.map(({ channel, group, display_name }) => ({
       channel_name: channel,
       custom_group: group,
+      display_name: display_name,
       rule_set_id: ruleSetId
     }));
-    
+
     batchUpdateMappings(updatePayload);
     message.success('分组映射已更新');
   };
@@ -75,15 +77,16 @@ export const GroupMappingForm: React.FC<GroupMappingFormProps> = ({ ruleSetId, o
       return;
     }
     const currentMappings = form.getFieldValue('mappings');
-    const mappingsObj = currentMappings.reduce((acc: Record<string, string>, curr: { channel: string; group: string }) => {
-      acc[curr.channel] = curr.group;
-      return acc;
-    }, {});
+    const mappingsArray = currentMappings.map((mapping: { channel: string; group: string; display_name?: string }) => ({
+      channel_name: mapping.channel,
+      custom_group: mapping.group,
+      display_name: mapping.display_name
+    }));
 
     createTemplateMutation.mutate({
       name: templateName,
       description: templateDescription,
-      mappings: mappingsObj
+      mappings: mappingsArray
     }, {
       onSuccess: () => {
         message.success('模板保存成功');
@@ -98,7 +101,7 @@ export const GroupMappingForm: React.FC<GroupMappingFormProps> = ({ ruleSetId, o
   // 应用模板
   const handleApplyTemplate = (templateIds: number[]) => {
     if (!ruleSetId || templateIds.length === 0) return;
-    
+
     applyTemplateMutation.mutate(
       { templateIds, ruleSetId },
       {
@@ -166,8 +169,15 @@ export const GroupMappingForm: React.FC<GroupMappingFormProps> = ({ ruleSetId, o
                     >
                       <Input placeholder="自定义分组名称" />
                     </Form.Item>
-                    <Button 
-                      danger 
+                    <Form.Item
+                      {...restField}
+                      name={[name, 'display_name']}
+                      className="group-mapping-input"
+                    >
+                      <Input placeholder="自定义显示名称（可选）" />
+                    </Form.Item>
+                    <Button
+                      danger
                       onClick={() => {
                         remove(name);
                         if (channel) {

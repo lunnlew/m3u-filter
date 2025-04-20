@@ -130,7 +130,7 @@ export const useGenerateTXT = () => {
 };
 
 export const useGroupMappings = (ruleSetId?: number) => {
-  return useQuery<Record<string, string>>({
+  return useQuery<Record<string, Record<string,string>>>({
     queryKey: ['group-mappings', ruleSetId],
     queryFn: () => fetchGroupMappings(ruleSetId),
   });

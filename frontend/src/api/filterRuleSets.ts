@@ -81,8 +81,8 @@ export const generateTXT = async (id: number): Promise<GenerateM3UResponse> => {
   return response.data.data;
 };
 
-export const fetchGroupMappings = async (ruleSetId?: number): Promise<Record<string, string>> => {
-  const response = await request<ApiResponse<Record<string, string>>>({
+export const fetchGroupMappings = async (ruleSetId?: number): Promise<Record<string, Record<string, string>>> => {
+  const response = await request<ApiResponse<Record<string, Record<string, string>>>>({
     method: 'get',
     url: '/group-mappings',
     params: { rule_set_id: ruleSetId }

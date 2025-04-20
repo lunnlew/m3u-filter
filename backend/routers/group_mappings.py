@@ -12,6 +12,7 @@ router = APIRouter()
 class GroupMapping(BaseModel):
     channel_name: str
     custom_group: str
+    display_name: Optional[str] = None
     rule_set_id: Optional[int] = None
 
 class GroupMappingTemplate(BaseModel):
@@ -21,37 +22,49 @@ class GroupMappingTemplate(BaseModel):
 
 @router.get("/group-mappings")
 def get_group_mappings(rule_set_id: Optional[int] = None):
-    """获取分组映射列表"""
+    """获取分组名称映射"""
     with get_db_connection() as conn:
         cursor = conn.cursor()
+        if rule_set_id:
+            cursor.execute(
+                "SELECT channel_name, custom_group, display_name FROM group_mappings WHERE rule_set_id = ? OR rule_set_id IS NULL",
+                (rule_set_id,)
+            )
+        else:
+            cursor.execute("SELECT channel_name, custom_group, display_name FROM group_mappings")
         
-        query = "SELECT channel_name, custom_group, rule_set_id FROM group_mappings"
-        params = []
-        
-        if rule_set_id is not None:
-            query += " WHERE rule_set_id = ?"
-            params.append(rule_set_id)
-        
-        cursor.execute(query, params)
-        mappings = [{
-            "channel_name": row[0],
-            "custom_group": row[1],
-            "rule_set_id": row[2]
-        } for row in cursor.fetchall()]
-        
-        return BaseResponse.success(data=mappings)
+        rows = cursor.fetchall()
+        result = {}
+        for row in rows:
+            result[row[0]] = {
+                "custom_group": row[1],
+                "display_name": row[2]
+            }
+        return BaseResponse.success(data=result)
 
-@router.post("/group-mappings")
-def create_group_mapping(mapping: GroupMapping):
-    """创建分组映射"""
+@router.post("/group-mappings/batch")
+def batch_update_group_mappings(mappings: List[GroupMapping]):
+    """批量更新分组映射"""
     with get_db_connection() as conn:
         cursor = conn.cursor()
-        
-        cursor.execute(
-            "INSERT INTO group_mappings (channel_name, custom_group, rule_set_id) VALUES (?, ?, ?)",
-            (mapping.channel_name, mapping.custom_group, mapping.rule_set_id)
-        )
-        
+        for mapping in mappings:
+            cursor.execute(
+                "INSERT OR REPLACE INTO group_mappings (channel_name, custom_group, display_name, rule_set_id) VALUES (?, ?, ?, ?)",
+                (mapping.channel_name, mapping.custom_group, mapping.display_name, mapping.rule_set_id)
+            )
+        conn.commit()
+        return BaseResponse.success()
+
+@router.delete("/group-mappings/batch")
+def batch_delete_group_mappings(mappings: List[GroupMapping]):
+    """批量删除分组映射"""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        for mapping in mappings:
+            cursor.execute(
+                "DELETE FROM group_mappings WHERE channel_name=? AND rule_set_id=?",
+                (mapping.channel_name, mapping.rule_set_id)
+            )
         conn.commit()
         return BaseResponse.success()
 
@@ -62,8 +75,8 @@ def update_group_mapping(channel_name: str, mapping: GroupMapping):
         cursor = conn.cursor()
         
         cursor.execute(
-            "UPDATE group_mappings SET custom_group = ?, rule_set_id = ? WHERE channel_name = ?",
-            (mapping.custom_group, mapping.rule_set_id, channel_name)
+            "UPDATE group_mappings SET custom_group = ?, rule_set_id = ?, display_name = ? WHERE channel_name = ?",
+            (mapping.custom_group, mapping.rule_set_id, mapping.display_name, channel_name)
         )
         
         if cursor.rowcount == 0:
@@ -115,10 +128,23 @@ def batch_create_group_mappings(mappings: List[GroupMapping]):
         
         for mapping in mappings:
             cursor.execute(
-                "INSERT INTO group_mappings (channel_name, custom_group, rule_set_id) VALUES (?, ?, ?)",
-                (mapping.channel_name, mapping.custom_group, mapping.rule_set_id)
+                "INSERT INTO group_mappings (channel_name, custom_group, rule_set_id, display_name) VALUES (?, ?, ?, ?)",
+                (mapping.channel_name, mapping.custom_group, mapping.rule_set_id, mapping.display_name)
             )
         
+        conn.commit()
+        return BaseResponse.success()
+
+@router.delete("/group-mappings/batch")
+def batch_delete_group_mappings(mappings: List[GroupMapping]):
+    """批量删除分组映射"""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        for mapping in mappings:
+            cursor.execute(
+                "DELETE FROM group_mappings WHERE channel_name=? AND rule_set_id=?",
+                (mapping.channel_name, mapping.rule_set_id)
+            )
         conn.commit()
         return BaseResponse.success()
 
@@ -146,8 +172,8 @@ def create_group_mapping_template(template: GroupMappingTemplate):
         # 保存映射数据
         for mapping in mappings:
             cursor.execute(
-                "INSERT INTO group_mapping_template_items (template_id, channel_name, custom_group) VALUES (?, ?, ?)",
-                (template_id, mapping.channel_name, mapping.custom_group)
+                "INSERT INTO group_mapping_template_items (template_id, channel_name, custom_group, display_name) VALUES (?, ?, ?, ?)",
+                (template_id, mapping.channel_name, mapping.custom_group, mapping.display_name)
             )
         
         conn.commit()
@@ -174,13 +200,14 @@ def get_group_mapping_templates():
             }
             
             cursor.execute(
-                "SELECT channel_name, custom_group FROM group_mapping_template_items WHERE template_id = ?",
+                "SELECT channel_name, custom_group, display_name FROM group_mapping_template_items WHERE template_id = ?",
                 (template_id,)
             )
             
             template["mappings"] = [{
                 "channel_name": item[0],
-                "custom_group": item[1]
+                "custom_group": item[1],
+                "display_name": item[2]
             } for item in cursor.fetchall()]
             
             templates.append(template)
@@ -218,16 +245,16 @@ def apply_group_mapping_template(template_id: int, rule_set_id: int):
         
         # 获取模板中的映射项
         cursor.execute(
-            "SELECT channel_name, custom_group FROM group_mapping_template_items WHERE template_id = ?",
+            "SELECT channel_name, custom_group, display_name FROM group_mapping_template_items WHERE template_id = ?",
             (template_id,)
         )
         mappings = cursor.fetchall()
         
         # 应用映射
-        for channel_name, custom_group in mappings:
+        for channel_name, custom_group, display_name in mappings:
             cursor.execute(
-                "INSERT OR REPLACE INTO group_mappings (channel_name, custom_group, rule_set_id) VALUES (?, ?, ?)",
-                (channel_name, custom_group, rule_set_id)
+                "INSERT OR REPLACE INTO group_mappings (channel_name, custom_group, display_name, rule_set_id) VALUES (?, ?, ?, ?)",
+                (channel_name, custom_group, display_name, rule_set_id)
             )
         
         conn.commit()
@@ -268,8 +295,8 @@ def update_group_mapping_template(template_id: int, template: GroupMappingTempla
         # 保存新的映射数据
         for mapping in mappings:
             cursor.execute(
-                "INSERT INTO group_mapping_template_items (template_id, channel_name, custom_group) VALUES (?, ?, ?)",
-                (template_id, mapping.channel_name, mapping.custom_group)
+                "INSERT INTO group_mapping_template_items (template_id, channel_name, custom_group, display_name) VALUES (?, ?, ?, ?)",
+                (template_id, mapping.channel_name, mapping.custom_group, mapping.display_name)
             )
         
         conn.commit()
@@ -296,16 +323,16 @@ def batch_apply_group_mapping_templates(rule_set_id: int, request: BatchApplyTem
         # 按照模板ID的顺序获取并应用映射
         for template_id in request.template_ids:
             cursor.execute(
-                "SELECT channel_name, custom_group FROM group_mapping_template_items WHERE template_id = ?",
+                "SELECT channel_name, custom_group, display_name FROM group_mapping_template_items WHERE template_id = ?",
                 (template_id,)
             )
             mappings = cursor.fetchall()
             
             # 应用映射
-            for channel_name, custom_group in mappings:
+            for channel_name, custom_group, display_name in mappings:
                 cursor.execute(
-                    "INSERT OR REPLACE INTO group_mappings (channel_name, custom_group, rule_set_id) VALUES (?, ?, ?)",
-                    (channel_name, custom_group, rule_set_id)
+                    "INSERT OR REPLACE INTO group_mappings (channel_name, custom_group, display_name, rule_set_id) VALUES (?, ?, ?, ?)",
+                    (channel_name, custom_group, display_name, rule_set_id)
                 )
         
         conn.commit()

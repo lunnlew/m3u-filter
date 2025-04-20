@@ -286,6 +286,7 @@ CREATE TABLE IF NOT EXISTS group_mapping_template_items (
     template_id  INTEGER NOT NULL,
     channel_name TEXT    NOT NULL,
     custom_group TEXT    NOT NULL,
+    display_name TEXT,
     PRIMARY KEY (
         template_id,
         channel_name
@@ -317,6 +318,7 @@ CREATE TABLE IF NOT EXISTS group_mapping_templates (
 CREATE TABLE IF NOT EXISTS group_mappings (
     channel_name TEXT    NOT NULL,
     custom_group TEXT    NOT NULL,
+    display_name TEXT,
     rule_set_id  INTEGER,
     PRIMARY KEY (
         channel_name,
