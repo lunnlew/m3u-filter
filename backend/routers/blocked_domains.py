@@ -34,10 +34,10 @@ def get_domain_key(url: str) -> str:
         if parsed_url.netloc:
             return parsed_url.netloc
         else:
-            logger.error(f"无法从URL中提取域名: {url}")
+            logger.debug(f"无法从URL中提取域名: {url}")
             return ""
     except Exception as e:
-        logger.error(f"解析URL时发生错误: {str(e)}")
+        logger.debug(f"解析URL时发生错误: {str(e)}")
         return ""
 
 
@@ -116,7 +116,7 @@ async def should_skip_domain(url: str) -> bool:
             return should_skip
             
     except Exception as e:
-        logger.error(f"检查域名黑名单失败: {str(e)}")
+        logger.debug(f"检查域名黑名单失败: {str(e)}")
         return False
 
 def cleanup_expired_cache():
@@ -182,7 +182,7 @@ async def record_domain_failure(url: str, error: str) -> bool:
                 'errors': [e for _, e in valid_failures[-3:]]  # 保存最近3次错误信息
             }
     except Exception as e:
-        logger.error(f"获取已存在的失败次数时出错: {str(e)}")
+        logger.debug(f"获取已存在的失败次数时出错: {str(e)}")
         # 如果查询失败，仅使用内存中的计数
         pending_updates[domain_key] = {
             'count': recent_failures,
@@ -225,8 +225,8 @@ async def batch_update_blocked_domains():
         ]
         logger.info(f"准备更新 {len(update_data)} 条记录")
         
-        # 将更新分批处理，每批10条减少单次事务量
-        batch_size = 10
+        # 将更新分批处理，每批50条减少单次事务量
+        batch_size = 50
         success_count = 0
         
         for i in range(0, len(update_data), batch_size):
@@ -258,18 +258,18 @@ async def batch_update_blocked_domains():
                             
                         except Exception as e:
                             conn.rollback()
-                            logger.error(f"执行批量更新时出错: {str(e)}")
+                            logger.debug(f"执行批量更新时出错: {str(e)}")
                             raise
                             
                 except sqlite3.OperationalError as e:
                     if "locked" in str(e) and attempt < max_retries - 1:
-                        logger.warning(f"数据库锁定，第{attempt+1}次重试批量更新")
+                        logger.debug(f"数据库锁定，第{attempt+1}次重试批量更新")
                         await asyncio.sleep(retry_delay * (attempt + 1))
                     else:
-                        logger.error(f"批量更新域名黑名单失败: {str(e)}")
+                        logger.debug(f"批量更新域名黑名单失败: {str(e)}")
                         break
                 except Exception as e:
-                    logger.error(f"批量更新域名黑名单时发生错误: {str(e)}")
+                    logger.debug(f"批量更新域名黑名单时发生错误: {str(e)}")
                     break
         
         # 清空已成功更新的记录
@@ -278,10 +278,10 @@ async def batch_update_blocked_domains():
             pending_updates.clear()
             last_batch_update = time.time()
         else:
-            logger.error("没有任何记录更新成功")
+            logger.debug("没有任何记录更新成功")
             
     except Exception as e:
-        logger.error(f"准备更新数据时出错: {str(e)}")
+        logger.debug(f"准备更新数据时出错: {str(e)}")
 
 @router.get("")
 async def get_blocked_domains(page: int = 1, page_size: int = 10, keyword: str = None):
@@ -325,7 +325,7 @@ async def get_blocked_domains(page: int = 1, page_size: int = 10, keyword: str =
                 'page_size': page_size
             })
     except Exception as e:
-        logger.error(f"获取域名黑名单失败: {str(e)}")
+        logger.debug(f"获取域名黑名单失败: {str(e)}")
         return BaseResponse.error(message="获取域名黑名单失败", code=500)
 
 @router.delete("/{domain}")
@@ -344,5 +344,5 @@ async def remove_blocked_domain(domain: str):
                 
             return BaseResponse.success(message="域名已从黑名单中移除")
     except Exception as e:
-        logger.error(f"移除域名黑名单失败: {str(e)}")
+        logger.debug(f"移除域名黑名单失败: {str(e)}")
         return BaseResponse.error(message="移除域名黑名单失败", code=500)

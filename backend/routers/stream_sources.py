@@ -1,7 +1,5 @@
 from fastapi import APIRouter, HTTPException
-from typing import List
 import sqlite3
-from datetime import datetime
 from models import StreamSource
 from sync import sync_stream_source
 from database import get_db_connection

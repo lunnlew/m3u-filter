@@ -87,7 +87,7 @@ def init_db():
                     # Check if this version was partially applied
                     c.execute("SELECT COUNT(*) FROM db_version WHERE version = ?", (version,))
                     if c.fetchone()[0] > 0:
-                        logger.warning(f"Skipping version {version} as it was already partially applied")
+                        logger.debug(f"Skipping version {version} as it was already partially applied")
                         continue
                     
                     c.executescript(script)
@@ -103,12 +103,12 @@ def init_db():
                     conn.commit()
                     logger.info(f"Successfully applied database upgrade version {version}")
                 except sqlite3.IntegrityError as e:
-                    logger.error(f"Database integrity error in version {version}: {str(e)}")
+                    logger.debug(f"Database integrity error in version {version}: {str(e)}")
                     conn.rollback()
                     # Continue with next migration instead of breaking
                     continue
                 except Exception as e:
-                    logger.error(f"Error applying upgrade script {version}: {str(e)}")
+                    logger.debug(f"Error applying upgrade script {version}: {str(e)}")
                     conn.rollback()
                     continue
 

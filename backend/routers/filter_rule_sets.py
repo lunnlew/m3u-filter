@@ -469,7 +469,7 @@ def _get_filtered_channels(set_id: int, conn) -> Tuple[List[dict], List[dict[str
                     sort_templates[group_name] = []
                 sort_templates[group_name].extend(channels)
         except json.JSONDecodeError:
-            logger.error(f"Invalid JSON format in sort template: {template_name}")
+            logger.debug(f"Invalid JSON format in sort template: {template_name}")
             continue
     
     return rule_set, final_channels, sort_templates
@@ -555,7 +555,7 @@ def _get_resolution_score(resolution: str) -> int:
                 # 假设最大的数字可能是高度
                 return int(max(numbers, key=int)) * 16/9  # 估算宽度
     except Exception as e:
-        logger.warning(f"解析分辨率失败: {resolution}, 错误: {str(e)}")
+        logger.debug(f"解析分辨率失败: {resolution}, 错误: {str(e)}")
     
     return 0  # 默认返回0
 
@@ -734,5 +734,5 @@ async def test_rules_in_set(
             )
             
     except Exception as e:
-        logger.error(f"创建规则测试任务失败: {str(e)}")
+        logger.debug(f"创建规则测试任务失败: {str(e)}")
         return BaseResponse.error(message=f"创建测试任务失败: {str(e)}", code=500)

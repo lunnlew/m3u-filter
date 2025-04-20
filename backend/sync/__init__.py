@@ -4,8 +4,6 @@ import xml.etree.ElementTree as ET
 import requests
 from bs4 import BeautifulSoup
 from typing import List, Dict, Optional
-from bs4.element import Tag, NavigableString, PageElement
-# 下载台标
 from utils import download_and_save_logo
 import aiohttp
 from database import get_db_connection
@@ -17,6 +15,8 @@ import zipfile
 import gzip
 from config import DATABASE_FILE
 from routers.blocked_domains import should_skip_domain
+import logging
+logger = logging.getLogger(__name__)
 
 def get_proxy_config():
     """获取代理配置"""
@@ -49,6 +49,7 @@ def get_proxy_settings():
         "http": proxy_url,
         "https": proxy_url
     }
+
 
 async def sync_epg_source(source_id: int):
     """同步单个EPG数据源"""
@@ -308,7 +309,7 @@ def extract_table_data(url: str, selector: str) -> List[Dict[str, str]]:
 
 async def sync_stream_source(source_id: int):
     """同步指定直播源的数据"""
-    print(f"[同步直播源] 开始同步源ID: {source_id}")
+    logger.info(f"[同步直播源] 开始同步源ID: {source_id}")
     # 获取直播源信息
     with get_db_connection() as conn:
         c = conn.cursor()
@@ -320,7 +321,7 @@ async def sync_stream_source(source_id: int):
         # 将结果转换为字典
         columns = [description[0] for description in c.description]
         source = dict(zip(columns, source))
-        print(f"[同步直播源] 获取到源信息: {source['name']} ({source['url']})")
+        logger.info(f"[同步直播源] 获取到源信息: {source['name']} ({source['url']})")
     
     try:
         # 在获取新内容之前，获取失效URL列表
@@ -337,31 +338,31 @@ async def sync_stream_source(source_id: int):
                 )
             """)
             invalid_urls = {row[0] for row in c.fetchall()}
-            print(f"[同步直播源] 已加载 {len(invalid_urls)} 个已知失效URL")
+            logger.info(f"[同步直播源] 已加载 {len(invalid_urls)} 个已知失效URL")
         
         # 获取代理设置
         proxies = get_proxy_settings()
         if proxies:
-            print("[同步直播源] 使用代理设置获取内容")
+            logger.info("[同步直播源] 使用代理设置获取内容")
         
         # 获取直播源内容
         async with aiohttp.ClientSession() as session:
             # 设置代理
             if proxies:
                 proxy_url = proxies.get('http') or proxies.get('https')
-                print(f"[同步直播源] 通过代理 {proxy_url} 获取内容")
+                logger.info(f"[同步直播源] 通过代理 {proxy_url} 获取内容")
                 async with session.get(source['url'], proxy=proxy_url) as response:
                     if response.status != 200:
                         raise Exception(f"获取直播源数据失败: HTTP {response.status}")
                     content = await response.text()
             else:
-                print("[同步直播源] 直接获取内容")
+                logger.info("[同步直播源] 直接获取内容")
                 async with session.get(source['url']) as response:
                     if response.status != 200:
                         raise Exception(f"获取直播源数据失败: HTTP {response.status}")
                     content = await response.text()
 
-        print("[同步直播源] 成功获取内容，开始解析")
+        logger.info("[同步直播源] 成功获取内容，开始解析")
         tvg_channel = {
             'x_tvg_url': source.get('x_tvg_url'),
             'catchup': source.get('catchup'),
@@ -369,14 +370,14 @@ async def sync_stream_source(source_id: int):
         }     
         # 根据文件类型解析内容
         if source['url'].lower().endswith('.m3u') or source['url'].lower().endswith('.m3u8') or content.strip().startswith('#EXTM3U') or source['type'] == 'm3u':
-            print("[同步直播源] 解析M3U格式内容")
+            logger.info("[同步直播源] 解析M3U格式内容")
             channels, tvg_channel = parse_m3u_content(content)
         else:
             # 处理txt格式
-            print("[同步直播源] 解析TXT格式内容")
+            logger.info("[同步直播源] 解析TXT格式内容")
             channels = parse_txt_content(content)
         
-        print(f"[同步直播源] 解析完成，获取到 {len(channels)} 个频道")
+        logger.info(f"[同步直播源] 解析完成，获取到 {len(channels)} 个频道")
         
         # 过滤黑名单域名
         filtered_channels = []
@@ -384,15 +385,15 @@ async def sync_stream_source(source_id: int):
             if not await should_skip_domain(channel['url']):
                 filtered_channels.append(channel)
             else:
-                print(f"[同步直播源] 跳过黑名单域名: {channel['url']}")
+                logger.info(f"[同步直播源] 跳过黑名单域名: {channel['url']}")
         
-        print(f"[同步直播源] 过滤后剩余 {len(filtered_channels)} 个频道")
+        logger.info(f"[同步直播源] 过滤后剩余 {len(filtered_channels)} 个频道")
         
         # 更新数据库
         with get_db_connection() as conn:
             c = conn.cursor()
             try:
-                print("[同步直播源] 开始更新数据库")
+                logger.info("[同步直播源] 开始更新数据库")
                 # 获取现有频道数据
                 c.execute("SELECT url FROM stream_tracks WHERE source_id = ?", (source_id,))
                 existing_urls = {row[0] for row in c.fetchall()}
@@ -421,11 +422,27 @@ async def sync_stream_source(source_id: int):
                 new_urls = {channel.get('url', '') for channel in filtered_channels}
                 urls_to_delete = existing_urls - new_urls
                 if urls_to_delete:
-                    print(f"[同步直播源] 删除 {len(urls_to_delete)} 个不再存在的频道...")
-                    c.executemany(
-                        "DELETE FROM stream_tracks WHERE source_id = ? AND url = ?",
-                        [(source_id, url) for url in urls_to_delete]
+                    logger.info(f"[同步直播源] 发现 {len(urls_to_delete)} 个不在新数据中的频道")
+                    # 检查这些URL的最近访问状态
+                    c.execute("""
+                        SELECT url FROM stream_tracks 
+                        WHERE source_id = ? AND url IN ({}) AND (
+                            last_success_time IS NOT NULL AND
+                            julianday('now') - julianday(last_success_time) <= 7
+                        )
+                    """.format(','.join('?' * len(urls_to_delete))), 
+                        [source_id] + list(urls_to_delete)
                     )
+                    recently_successful_urls = {row[0] for row in c.fetchall()}
+                    
+                    # 只删除最近7天内没有成功访问记录的频道
+                    urls_to_actually_delete = urls_to_delete - recently_successful_urls
+                    if urls_to_actually_delete:
+                        logger.info(f"[同步直播源] 删除 {len(urls_to_actually_delete)} 个频道，保留 {len(recently_successful_urls)} 个最近可用的频道...")
+                        c.executemany(
+                            "DELETE FROM stream_tracks WHERE source_id = ? AND url = ?",
+                            [(source_id, url) for url in urls_to_actually_delete]
+                        )
 
                 # 更新同步时间
                 c.execute(
@@ -435,14 +452,14 @@ async def sync_stream_source(source_id: int):
 
                 # 如果有epg地址，则检查是否已存在，不存在才加入epg表
                 if tvg_channel.get('x_tvg_url'):
-                    print(f"[同步直播源] 发现EPG地址: {tvg_channel['x_tvg_url']}")
+                    logger.info(f"[同步直播源] 发现EPG地址: {tvg_channel['x_tvg_url']}")
                     # 处理可能存在的多个EPG地址（以逗号分隔）
                     epg_urls = [url.strip() for url in tvg_channel['x_tvg_url'].split(',') if url.strip()]
                     
                     for epg_url in epg_urls:
                         c.execute("SELECT COUNT(*) FROM epg_sources WHERE url = ?", (epg_url,))
                         if c.fetchone()[0] == 0:
-                            print(f"[同步直播源] 添加新的EPG源: {epg_url}")
+                            logger.info(f"[同步直播源] 添加新的EPG源: {epg_url}")
                             c.execute(
                                 "INSERT INTO epg_sources (name, url, active, sync_interval, default_language) VALUES (?, ?, ?, ?, ?)",
                                 (f"来自直播订阅{source['name']}", epg_url, True, 6, 'zh')
@@ -452,22 +469,22 @@ async def sync_stream_source(source_id: int):
                             update_source_schedule(epg_source_id)
 
                 conn.commit()
-                print("[同步直播源] 数据库更新完成")
+                logger.info("[同步直播源] 数据库更新完成")
             except Exception as e:
                 conn.rollback()
-                print(f"[同步直播源] 数据库更新失败: {str(e)}")
+                logger.debug(f"[同步直播源] 数据库更新失败: {str(e)}")
                 raise Exception(f"更新数据库失败: {str(e)}")
         
-        print(f"[同步直播源] 同步完成，源ID: {source_id}")
+        logger.info(f"[同步直播源] 同步完成，源ID: {source_id}")
         return filtered_channels
                 
     except aiohttp.ClientError as e:
         error_msg = f"网络请求失败: {str(e)}"
-        print(f"[同步直播源] {error_msg}")
+        logger.debug(f"[同步直播源] {error_msg}")
         raise Exception(error_msg)
     except Exception as e:
         error_msg = f"同步失败: {str(e)}"
-        print(f"[同步直播源] {error_msg}")
+        logger.debug(f"[同步直播源] {error_msg}")
         raise
 
 def parse_m3u_content(content: str) -> tuple[List[Dict[str, str]], Dict[str, str]]:

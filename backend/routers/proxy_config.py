@@ -1,5 +1,4 @@
 from fastapi import APIRouter, HTTPException
-import sqlite3
 from models import ProxyConfig
 from database import get_db_connection
 from models import BaseResponse

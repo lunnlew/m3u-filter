@@ -25,12 +25,12 @@ FAILURE_UPDATE_INTERVAL = 60  # 秒
 ffmpeg_executor = ThreadPoolExecutor(
     max_workers=4, 
     thread_name_prefix="ffmpeg_worker",
-    initializer=lambda: logger.info("FFmpeg worker initialized")
+    initializer=lambda: logger.debug("FFmpeg worker initialized")
 )
 db_executor = ThreadPoolExecutor(
     max_workers=4, 
     thread_name_prefix="db_worker",
-    initializer=lambda: logger.info("DB worker initialized")
+    initializer=lambda: logger.debug("DB worker initialized")
 )
 
 async def increment_failure_count(track_id: int, url: str):
@@ -67,7 +67,7 @@ async def increment_failure_count(track_id: int, url: str):
             await batch_update_failures()
             
     except Exception as e:
-        logger.error(f"增加失败计数时出错: {str(e)}")
+        logger.debug(f"增加失败计数时出错: {str(e)}")
 
 
 
@@ -93,9 +93,9 @@ async def batch_update_failures():
                 WHERE id = ?
             """, [(u['timestamp'], u['track_id']) for u in updates])
             conn.commit()
-            logger.info(f"批量更新了 {len(updates)} 个频道的失败计数")
+            logger.debug(f"批量更新了 {len(updates)} 个频道的失败计数")
     except Exception as e:
-        logger.error(f"批量更新失败计数时出错: {str(e)}")
+        logger.debug(f"批量更新失败计数时出错: {str(e)}")
         # 如果更新失败，将未更新的记录放回队列
         failure_update_queue.extend(updates)
 
@@ -112,7 +112,7 @@ async def cleanup_ffmpeg_processes():
             except (psutil.NoSuchProcess, psutil.AccessDenied):
                 pass
     except Exception as e:
-        logger.error(f"清理FFmpeg进程失败: {str(e)}")
+        logger.debug(f"清理FFmpeg进程失败: {str(e)}")
 
 # 添加结果更新队列
 track_result_queue = []
@@ -147,9 +147,9 @@ async def batch_update_track_results():
                   u['track_id']) for u in updates]
             )
             conn.commit()
-            logger.info(f"批量更新了 {len(updates)} 个频道的测试结果")
+            logger.debug(f"批量更新了 {len(updates)} 个频道的测试结果")
     except Exception as e:
-        logger.error(f"批量更新测试结果时出错: {str(e)}")
+        logger.debug(f"批量更新测试结果时出错: {str(e)}")
         # 如果更新失败，将未更新的记录放回队列
         track_result_queue.extend(updates)
 
@@ -270,7 +270,7 @@ async def cleanup_invalid_tracks():
             logger.info(f"清理了 {cleaned_count} 个无效频道")
             
     except Exception as e:
-        logger.error(f"清理无效频道失败: {str(e)}")
+        logger.debug(f"清理无效频道失败: {str(e)}")
         raise
 
 async def maintain_invalid_urls():
@@ -317,7 +317,7 @@ async def maintain_invalid_urls():
             logger.info("[维护失效URL] 维护任务完成")
             
     except Exception as e:
-        logger.error(f"[维护失效URL] 维护任务失败: {str(e)}")
+        logger.debug(f"[维护失效URL] 维护任务失败: {str(e)}")
         raise
 
 
@@ -402,7 +402,7 @@ async def test_rtmp_rtsp_download_speed(url: str, bitrate: int) -> dict:
                             
                             current_speed = estimated_speed
                 except Exception as e:
-                    logger.error(f"读取输出错误: {str(e)}")
+                    logger.debug(f"读取输出错误: {str(e)}")
                     break
 
         read_task = asyncio.create_task(read_output())
@@ -413,7 +413,7 @@ async def test_rtmp_rtsp_download_speed(url: str, bitrate: int) -> dict:
                 timeout=5
             )
         except asyncio.TimeoutError:
-            logger.warning(f"{protocol.upper()}测速超时: {url}")
+            logger.debug(f"{protocol.upper()}测速超时: {url}")
         finally:
             try:
                 process.kill()
@@ -450,7 +450,7 @@ async def test_rtmp_rtsp_download_speed(url: str, bitrate: int) -> dict:
                 'quality_score': round(min(1.0, current_speed / (bitrate / 1e6)) if bitrate > 0 else 0.0, 2)
             }
     except Exception as e:
-        logger.error(f"测速失败: {url}, 错误: {str(e)}")
+        logger.debug(f"测速失败: {url}, 错误: {str(e)}")
         return {
             'download_speed': 0.0,
             'speed_test_status': False,
@@ -544,7 +544,7 @@ async def test_http_download_speed(url: str, bitrate: int) -> dict:
                                 # 确保添加有效的速度值到历史记录
                                 if instant_speed > 0:
                                     speed_history.append(instant_speed)
-                                    logger.info(f"添加速度历史记录: {instant_speed:.2f}Mbps, 当前历史记录数: {len(speed_history)}")
+                                    logger.debug(f"添加速度历史记录: {instant_speed:.2f}Mbps, 当前历史记录数: {len(speed_history)}")
                                 
                                 # 更新最后的大小和时间
                                 last_size = current_size
@@ -559,7 +559,7 @@ async def test_http_download_speed(url: str, bitrate: int) -> dict:
                                 # 也将估算的速度添加到历史记录
                                 if estimated_speed > 0:
                                     speed_history.append(estimated_speed)
-                                    logger.info(f"添加估算速度到历史记录: {estimated_speed:.2f}Mbps, 当前历史记录数: {len(speed_history)}")
+                                    logger.debug(f"添加估算速度到历史记录: {estimated_speed:.2f}Mbps, 当前历史记录数: {len(speed_history)}")
                                 downloaded = int((bitrate * speed_factor) * (current_time - start_time) / 8)
                         
                         # 计算持续时间（即使没有size信息）
@@ -582,18 +582,18 @@ async def test_http_download_speed(url: str, bitrate: int) -> dict:
                             buffer_ratio = (current_speed * 1e6) / bitrate
                             # 修改为：允许超过1.0的值，表示有额外缓冲能力
                             buffer_health = buffer_ratio
-                            logger.info(f"缓冲健康度计算: 速度={current_speed:.2f}Mbps, 码率={bitrate/1e6:.2f}Mbps, 比率={buffer_ratio:.2f}")
+                            logger.debug(f"缓冲健康度计算: 速度={current_speed:.2f}Mbps, 码率={bitrate/1e6:.2f}Mbps, 比率={buffer_ratio:.2f}")
                         
                         # 最低速度限制和日志记录
                         current_speed = max(current_speed, 0.1) if current_speed > 0 else 0.1
                         
                         # 调试日志包含数据来源信息
-                        logger.info(f"速度计算方式: {'实际数据' if size_match else '估算'} | "
+                        logger.debug(f"速度计算方式: {'实际数据' if size_match else '估算'} | "
                                     f"速度: {current_speed:.2f}Mbps 持续时间: {duration:.2f}s | "
                                     f"缓冲健康度: {buffer_health:.2f}")
 
                 except Exception as e:
-                    logger.error(f"读取输出错误: {str(e)}")
+                    logger.debug(f"读取输出错误: {str(e)}")
                     break
 
         # 启动输出读取任务
@@ -606,7 +606,7 @@ async def test_http_download_speed(url: str, bitrate: int) -> dict:
                 timeout=5
             )
         except asyncio.TimeoutError:
-            logger.warning(f"测速超时: {url}")
+            logger.debug(f"测速超时: {url}")
         finally:
             # 确保进程被终止和清理
             try:
@@ -623,7 +623,7 @@ async def test_http_download_speed(url: str, bitrate: int) -> dict:
             
             # 计算速度稳定性
             stability_score = 0.0
-            logger.info(f"计算稳定性，速度历史记录数: {len(speed_history)}")
+            logger.debug(f"计算稳定性，速度历史记录数: {len(speed_history)}")
             
             if len(speed_history) > 1:
                 # 计算速度的标准差与平均值的比率，越小越稳定
@@ -635,11 +635,11 @@ async def test_http_download_speed(url: str, bitrate: int) -> dict:
                     # 如果标准差非常大，可能导致负值，所以使用max确保最小为0
                     coefficient = min(std_dev / avg_speed, 1.0)  # 限制系数最大为1
                     stability_score = max(0, 1 - coefficient)
-                    logger.info(f"稳定性计算: 平均速度={avg_speed:.2f}, 标准差={std_dev:.2f}, 系数={coefficient:.2f}, 稳定性评分={stability_score:.2f}")
+                    logger.debug(f"稳定性计算: 平均速度={avg_speed:.2f}, 标准差={std_dev:.2f}, 系数={coefficient:.2f}, 稳定性评分={stability_score:.2f}")
             else:
                 # 如果没有足够的历史记录，给一个默认的中等稳定性评分
                 stability_score = 0.5
-                logger.info(f"历史记录不足，使用默认稳定性评分: {stability_score}")
+                logger.debug(f"历史记录不足，使用默认稳定性评分: {stability_score}")
             
             # 计算综合质量评分 (结合速度、缓冲健康度和稳定性)
             quality_score = 0.0
@@ -670,10 +670,10 @@ async def test_http_download_speed(url: str, bitrate: int) -> dict:
                      stability_score > 0.3)   # 稳定性至少要达到30%
             
             speed = current_speed
-            logger.info(f"测速完成: {url}, 速度: {speed:.2f}Mbps, 缓冲健康度: {buffer_health:.2f}, 稳定性: {stability_score:.2f}, 质量评分: {quality_score:.2f}")
+            logger.debug(f"测速完成: {url}, 速度: {speed:.2f}Mbps, 缓冲健康度: {buffer_health:.2f}, 稳定性: {stability_score:.2f}, 质量评分: {quality_score:.2f}")
 
     except Exception as e:
-        logger.error(f"测速失败: {url}, {str(e)}")
+        logger.debug(f"测速失败: {url}, {str(e)}")
         status = False
         speed = 0.0
         downloaded = 0
@@ -708,7 +708,7 @@ async def probe_rtmp_stream(url: str) -> dict:
     try:
         import ffmpeg
     except ImportError:
-        logger.error("ffmpeg-python库未安装")
+        logger.debug("ffmpeg-python库未安装")
         return {}
 
     try:
@@ -752,15 +752,15 @@ async def probe_rtmp_stream(url: str) -> dict:
             return probe
             
     except asyncio.TimeoutError:
-        logger.error(f"RTMP/RTSP探测超时: {url}")
+        logger.debug(f"RTMP/RTSP探测超时: {url}")
         # 清理超时进程
         await cleanup_ffmpeg_processes()
     except ffmpeg.Error as e:
         error_message = str(getattr(e, 'stderr', str(e)))
-        logger.error(f"RTMP/RTSP探测失败: {url}, {error_message}")
+        logger.debug(f"RTMP/RTSP探测失败: {url}, {error_message}")
         await cleanup_ffmpeg_processes()
     except Exception as e:
-        logger.error(f"RTMP/RTSP探测出错: {url}, 错误: {str(e)}")
+        logger.debug(f"RTMP/RTSP探测出错: {url}, 错误: {str(e)}")
         await cleanup_ffmpeg_processes()
         
     return {}
@@ -770,7 +770,7 @@ async def probe_stream(url: str) -> dict:
     try:
         import ffmpeg
     except ImportError:
-        logger.error("ffmpeg-python库未安装")
+        logger.debug("ffmpeg-python库未安装")
         return {}
 
     process = None
@@ -796,20 +796,20 @@ async def probe_stream(url: str) -> dict:
         probe = await asyncio.wait_for(probe_future, timeout=5)
         
         if probe:
-            logger.info(f"FFmpeg探测成功: {url}")
+            logger.debug(f"FFmpeg探测成功: {url}")
         return probe
     except ffmpeg.Error as fe:
-        logger.error(f"FFmpeg探测失败: {url}, {str(getattr(fe, 'stderr', str(fe)))}")
+        logger.debug(f"FFmpeg探测失败: {url}, {str(getattr(fe, 'stderr', str(fe)))}")
         # 清理超时进程
         await cleanup_ffmpeg_processes()
         return {}
     except asyncio.TimeoutError:
-        logger.error(f"FFmpeg探测超时: {url}")
+        logger.debug(f"FFmpeg探测超时: {url}")
         # 清理超时进程
         await cleanup_ffmpeg_processes()
         return {}
     except Exception as e:
-        logger.error(f"FFmpeg探测失败: {url}, 错误: {str(e)}") # 清理超时进程
+        logger.debug(f"FFmpeg探测失败: {url}, 错误: {str(e)}") # 清理超时进程
         await cleanup_ffmpeg_processes()
         return {}
         
@@ -823,7 +823,7 @@ async def probe_stream(url: str) -> dict:
 
 async def test_stream_url(url: str, track_id: int) -> tuple[bool, float, dict]:
     start_time = datetime.now()
-    logger.info(f"开始测试流媒体URL: {url}, track_id: {track_id}")
+    logger.debug(f"开始测试流媒体URL: {url}, track_id: {track_id}")
 
     # 解析URL获取主机名
     parsed_url = urlparse(url)
@@ -833,35 +833,27 @@ async def test_stream_url(url: str, track_id: int) -> tuple[bool, float, dict]:
     if hostname and is_ipv6_address(hostname):
         # 检查系统是否支持IPv6
         if not await check_ipv6_connectivity():
-            logger.warning(f"系统不支持IPv6，跳过测试: {url}")
+            logger.debug(f"系统不支持IPv6，跳过测试: {url}")
             return False, 0.0, get_default_stream_info()
-        logger.info(f"检测到IPv6地址，系统支持IPv6，继续测试: {url}")
+        logger.debug(f"检测到IPv6地址，系统支持IPv6，继续测试: {url}")
 
     # 检查域名是否在黑名单中
     domain_key = get_domain_key(url)
     if not domain_key:
-        logger.error(f"无法获取有效的域名键值: {url}")
+        logger.debug(f"无法获取有效的域名键值: {url}")
         if track_id:
             await increment_failure_count(track_id, url)
         return False, 0.0, get_default_stream_info()
-
-    # 检查域名是否在黑名单中
-    domain_key = get_domain_key(url)
-    if not domain_key:
-        logger.error(f"无法获取有效的域名键值: {url}")
-        if track_id:
-            await increment_failure_count(track_id, url)  # 传入URL参数
-        return False, 0.0, get_default_stream_info()
         
     if await should_skip_domain(domain_key):
-        logger.warning(f"跳过测试黑名单域名: {url}")
+        logger.debug(f"跳过测试黑名单域名: {url}")
         # 移除对失败计数的更新
         return False, 0.0, get_default_stream_info()
 
     try:
         # 检测协议类型
         protocol = detect_stream_protocol(url)
-        logger.info(f"检测到流媒体协议: {protocol}, URL: {url}")
+        logger.debug(f"检测到流媒体协议: {protocol}, URL: {url}")
         
         # 根据协议类型选择探测方法
         if protocol in ["rtmp", "rtsp"]:  # 合并 RTMP 和 RTSP 的处理
@@ -878,42 +870,42 @@ async def test_stream_url(url: str, track_id: int) -> tuple[bool, float, dict]:
             return False, 0.0, get_default_stream_info()
             
         # 从探测结果中获取码率
-        logger.info(f"开始提取码率信息: {url}")
+        logger.debug(f"开始提取码率信息: {url}")
         bitrate = await extract_bitrate(probe_result)
-        logger.info(f"码率提取完成: {url}, bitrate: {bitrate/1024/1024:.2f}Mbps")
+        logger.debug(f"码率提取完成: {url}, bitrate: {bitrate/1024/1024:.2f}Mbps")
         
         # 执行ping测试
-        logger.info(f"开始执行Ping测试: {url}")
+        logger.debug(f"开始执行Ping测试: {url}")
         ping_time = await ping_url(url)
-        logger.info(f"Ping测试完成: {url}, ping_time: {ping_time}ms")
+        logger.debug(f"Ping测试完成: {url}, ping_time: {ping_time}ms")
         
         # 执行下载速度测试
-        logger.info(f"开始执行下载速度测试: {url}")
+        logger.debug(f"开始执行下载速度测试: {url}")
         speed_info = await test_download_speed(url, track_id, bitrate) if track_id else {
             'download_speed': 0.0,
             'speed_test_status': False,
             'speed_test_time': None
         }
-        logger.info(f"下载速度测试完成: {url}, speed_info: {speed_info}")
+        logger.debug(f"下载速度测试完成: {url}, speed_info: {speed_info}")
 
         # 计算总耗时
         duration = (datetime.now() - start_time).total_seconds()
 
         # 解析流媒体信息
-        logger.info(f"开始解析流媒体信息: {url}")
+        logger.debug(f"开始解析流媒体信息: {url}")
         stream_info = await extract_stream_info(probe_result, ping_time, speed_info)
-        logger.info(f"流媒体信息解析完成: {url}, stream_info: {stream_info}")
+        logger.debug(f"流媒体信息解析完成: {url}, stream_info: {stream_info}")
 
         # 根据速度测试结果确定状态
         status = speed_info.get('speed_test_status', False)
-        logger.info(f"流媒体测试完成: {url}, 状态: {status}, 延迟: {duration}秒")
+        logger.debug(f"流媒体测试完成: {url}, 状态: {status}, 延迟: {duration}秒")
         return status, duration, stream_info
 
     except Exception as e:
         # 只有在域名键值有效时才记录失败
         if domain_key:
             asyncio.create_task(record_domain_failure(domain_key, str(e)))
-        logger.error(f"测试流媒体URL时发生错误: {url}, 错误信息: {str(e)}")
+        logger.debug(f"测试流媒体URL时发生错误: {url}, 错误信息: {str(e)}")
         
         if track_id:
             await increment_failure_count(track_id, url)
@@ -970,11 +962,11 @@ async def update_stream_status(track_id: int, url: str, success: bool, test_time
             conn.commit()
             
     except Exception as e:
-        logger.error(f"更新流媒体状态失败: {str(e)}")
+        logger.debug(f"更新流媒体状态失败: {str(e)}")
         raise
 
 async def test_stream_track(track_id: int):
-    logger.info(f"开始测试频道ID: {track_id}")
+    logger.debug(f"开始测试频道ID: {track_id}")
     global track_result_queue, last_track_result_update
     
     try:
@@ -983,13 +975,13 @@ async def test_stream_track(track_id: int):
             c.execute("SELECT url FROM stream_tracks WHERE id = ?", (track_id,))
             result = c.fetchone()
             if not result:
-                logger.warning(f"未找到频道ID: {track_id}")
+                logger.debug(f"未找到频道ID: {track_id}")
                 return
             
             url = result[0]
-            logger.info(f"开始测试频道URL: {url}, track_id={track_id}")
+            logger.debug(f"开始测试频道URL: {url}, track_id={track_id}")
             status, speed, stream_info = await test_stream_url(url, track_id)
-            logger.info(f"频道测试完成: track_id={track_id}, status={status}, speed={speed}")
+            logger.debug(f"频道测试完成: track_id={track_id}, status={status}, speed={speed}")
             
             # 将测试结果添加到更新队列
             track_result_queue.append({
@@ -1012,7 +1004,7 @@ async def test_stream_track(track_id: int):
                 await batch_update_track_results()
                 
     except Exception as e:
-        logger.error(f"测试频道失败: track_id={track_id}, 错误信息: {str(e)}", exc_info=True)
+        logger.debug(f"测试频道失败: track_id={track_id}, 错误信息: {str(e)}", exc_info=True)
         # 测试失败时更新状态
         await update_stream_status(
             track_id=track_id,

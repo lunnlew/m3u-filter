@@ -57,7 +57,7 @@ async def extract_bitrate(probe_result: dict) -> int:
         return DEFAULT_BITRATE
         
     except (ValueError, TypeError) as e:
-        logger.warning(f"解析码率时出错: {str(e)}, 使用默认值5Mbps")
+        logger.debug(f"解析码率时出错: {str(e)}, 使用默认值5Mbps")
         return DEFAULT_BITRATE
 
 
@@ -116,7 +116,7 @@ def parse_test_results(results: list, track_id: int) -> tuple:
 
     for i, result in enumerate(results):
         if isinstance(result, Exception):
-            logger.error(f"任务 {i} 执行失败: {str(result)}")
+            logger.debug(f"任务 {i} 执行失败: {str(result)}")
             continue
             
         if i == 0:  # FFmpeg探测结果

@@ -1,5 +1,4 @@
 from fastapi import APIRouter, HTTPException
-from typing import List
 from pydantic import BaseModel, HttpUrl
 from database import get_db_connection
 import sqlite3

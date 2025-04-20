@@ -1,7 +1,5 @@
 from fastapi import APIRouter, HTTPException
-from typing import List
 import sqlite3
-from datetime import datetime
 from models import EPGSource
 from models import BaseResponse
 from sync import sync_epg_source, sync_all_active_sources

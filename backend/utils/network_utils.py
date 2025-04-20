@@ -39,7 +39,7 @@ async def check_ipv6_connectivity() -> bool:
             logger.info(f"IPv6测试失败 ({host}): {str(e)}")
             continue
     
-    logger.warning("系统不支持IPv6连接")
+    logger.debug("系统不支持IPv6连接")
     _ipv6_supported = False
     return False
 
@@ -79,22 +79,22 @@ async def ping_url(url: str) -> float:
         host = parsed_url.hostname
 
         if not host:
-            logger.error(f"无法解析URL: {url}")
+            logger.debug(f"无法解析URL: {url}")
             return 0.0
 
         # 检查是否为IPv6地址
         if is_ipv6_address(host):
             # 如果是IPv6地址但系统不支持IPv6，直接返回失败
             if not await check_ipv6_connectivity():
-                logger.warning(f"系统不支持IPv6，跳过测试: {host}")
+                logger.debug(f"系统不支持IPv6，跳过测试: {host}")
                 return 0.0
 
         # 使用ping3库测试域名或IP地址
         ping_time = ping(host, unit='ms')
         if ping_time is None:
-            logger.error(f"Ping失败: 无法到达 {host}")
+            logger.debug(f"Ping失败: 无法到达 {host}")
             return 0.0
         return ping_time
     except Exception as e:
-        logger.error(f"Ping测试时发生错误: {str(e)}")
+        logger.debug(f"Ping测试时发生错误: {str(e)}")
         return 0.0

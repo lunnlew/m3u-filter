@@ -1,11 +1,9 @@
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse, HTMLResponse
-import os
 import mimetypes
 import logging
 from urllib.parse import unquote
 from config import PATH_RESOURCE_ROOT, PATH_WEB_ROOT
-from pathlib import Path
 
 logger = logging.getLogger(__name__)
 router = APIRouter()

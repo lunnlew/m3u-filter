@@ -2,20 +2,11 @@ from fastapi import APIRouter, HTTPException, BackgroundTasks
 from typing import List, Optional, Tuple
 import sqlite3
 from datetime import datetime
-import aiohttp
 import asyncio
-
 from models import StreamTrack
 from database import get_db_connection
 from typing import Dict
 from models import BaseResponse
-from ping3 import ping
-from urllib.parse import urlparse, urljoin
-from concurrent.futures import ThreadPoolExecutor
-from functools import partial
-import re  # 添加 re 模块导入
-import time
-from .blocked_domains import should_skip_domain, record_domain_failure, get_domain_key
 from utils import *
 from modules.stream_tracks.utils.util import *
 
@@ -218,7 +209,7 @@ async def process_batch_tasks(task_id: int, track_ids: List[int]):
             mark_task_completed(task_id, final_results)
 
     except Exception as e:
-        logger.error(f"批量测试任务 {task_id} 执行失败: {str(e)}")
+        logger.debug(f"批量测试任务 {task_id} 执行失败: {str(e)}")
         mark_task_failed(task_id, str(e))
         raise
 
@@ -257,7 +248,7 @@ async def test_single_track(track_id: int, semaphore: asyncio.Semaphore):
             }
         except Exception as e:
             error_msg = str(e)
-            logger.error(f"处理频道 {track_id} 时出错: {error_msg}")
+            logger.debug(f"处理频道 {track_id} 时出错: {error_msg}")
             await update_stream_status(
                 track_id=track_id,
                 url=url,
@@ -350,5 +341,5 @@ async def get_stream_statistics():
                 'invalid_urls': invalid_stats
             })
         except Exception as e:
-            logger.error(f"获取统计信息失败: {str(e)}")
+            logger.debug(f"获取统计信息失败: {str(e)}")
             return BaseResponse.error(message="获取统计信息失败")
